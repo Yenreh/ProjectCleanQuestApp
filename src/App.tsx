@@ -125,6 +125,25 @@ export default function App() {
                   <Settings className="w-4 h-4 mr-2" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
+
+                {/* Selector de nivel de maestría (DEV) */}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Nivel de maestría</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setMasteryLevel("novice")}>
+                  <span className={masteryLevel === "novice" ? "font-semibold" : ""}>Novato</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMasteryLevel("solver")}>
+                  <span className={masteryLevel === "solver" ? "font-semibold" : ""}>Solucionador</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMasteryLevel("expert")}>
+                  <span className={masteryLevel === "expert" ? "font-semibold" : ""}>Experto</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMasteryLevel("master")}>
+                  <span className={masteryLevel === "master" ? "font-semibold" : ""}>Maestro</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMasteryLevel("visionary")}>
+                  <span className={masteryLevel === "visionary" ? "font-semibold" : ""}>Visionario</span>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

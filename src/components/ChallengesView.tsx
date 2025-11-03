@@ -255,8 +255,8 @@ export function ChallengesView({ masteryLevel }: ChallengesViewProps) {
         </Tabs>
       )}
 
-      {/* EXPERT: Strategic Challenges */}
-      {masteryLevel === "expert" && (
+      {/* EXPERT+: Strategic Challenges */}
+      {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-6 bg-[#f0f7ff]">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="w-5 h-5 text-[#89a7c4]" />
@@ -275,8 +275,8 @@ export function ChallengesView({ masteryLevel }: ChallengesViewProps) {
         </Card>
       )}
 
-      {/* MASTER: Team Goals */}
-      {masteryLevel === "master" && (
+      {/* MASTER+: Team Goals */}
+      {(masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-6 bg-[#fef3e0]">
           <h4 className="mb-3">Meta grupal de la semana</h4>
           <p className="text-sm mb-3">Alcanzar 80% de completitud con rotación equitativa</p>
@@ -311,8 +311,8 @@ export function ChallengesView({ masteryLevel }: ChallengesViewProps) {
         </Tabs>
       )}
 
-      {/* NOVICE: Simple Tip */}
-      {masteryLevel === "novice" && (
+      {/* NOVICE+ (for non-visionary): Simple Tip */}
+      {masteryLevel !== "visionary" && (
         <Card className="p-4 mt-6 bg-[#e9f5f0]">
           <div className="flex gap-3">
             <Lightbulb className="w-5 h-5 text-[#6fbd9d] flex-shrink-0" />

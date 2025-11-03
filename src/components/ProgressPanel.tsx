@@ -246,7 +246,7 @@ export function ProgressPanel({ masteryLevel }: ProgressPanelProps) {
         </div>
       </Card>
 
-      {/* VISIONARY: Active Experiments */}
+      {/* VISIONARY ONLY: Active Experiments */}
       {masteryLevel === "visionary" && (
         <Card className="p-4 mb-6 bg-[#fef3e0]">
           <h4 className="mb-3">🧪 Experimento activo</h4>

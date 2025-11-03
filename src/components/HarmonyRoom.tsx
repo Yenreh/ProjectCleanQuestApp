@@ -326,8 +326,8 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
         </Card>
       )}
 
-      {/* EXPERT: Advanced Analytics */}
-      {masteryLevel === "expert" && (
+      {/* EXPERT+ (non-visionary): Advanced Analytics */}
+      {(masteryLevel === "expert" || masteryLevel === "master") && (
         <Card className="p-4 mb-6 bg-[#f0f7ff]">
           <h4 className="mb-3">Análisis de equilibrio</h4>
           <div className="space-y-2">

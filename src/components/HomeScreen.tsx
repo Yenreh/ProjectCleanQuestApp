@@ -95,24 +95,22 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
         </div>
       </div>
 
-      {/* NOVICE: Rotation Status */}
-      {masteryLevel === "novice" && (
-        <div className="w-full mb-4">
-          {rotationPercentage <= 33 ? (
-            <Badge className="bg-[#e9f5f0] text-[#6fbd9d] px-3 py-2 w-full justify-center">
-              ✓ Rotación equilibrada ({rotationPercentage}%)
-            </Badge>
-          ) : (
-            <Badge className="bg-[#fff4e6] text-[#d97706] px-3 py-2 w-full justify-center">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              Alerta: Rotación desbalanceada ({rotationPercentage}%)
-            </Badge>
-          )}
-        </div>
-      )}
+      {/* NOVICE: Rotation Status (visible for all levels) */}
+      <div className="w-full mb-4">
+        {rotationPercentage <= 33 ? (
+          <Badge className="bg-[#e9f5f0] text-[#6fbd9d] px-3 py-2 w-full justify-center">
+            ✓ Rotación equilibrada ({rotationPercentage}%)
+          </Badge>
+        ) : (
+          <Badge className="bg-[#fff4e6] text-[#d97706] px-3 py-2 w-full justify-center">
+            <AlertCircle className="w-4 h-4 mr-1" />
+            Alerta: Rotación desbalanceada ({rotationPercentage}%)
+          </Badge>
+        )}
+      </div>
 
-      {/* SOLVER: How It's Calculated */}
-      {masteryLevel === "solver" && (
+      {/* SOLVER+: How It's Calculated */}
+      {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-4 w-full bg-white">
           <Collapsible open={showCalculation} onOpenChange={setShowCalculation}>
             <CollapsibleTrigger asChild>
@@ -154,8 +152,8 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
         </Card>
       )}
 
-      {/* EXPERT: What-If Impact Panel */}
-      {masteryLevel === "expert" && selectedTask && (
+      {/* EXPERT+: What-If Impact Panel */}
+      {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && selectedTask && (
         <Card className="p-4 mb-4 w-full bg-[#f0f7ff]">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="w-5 h-5 text-[#89a7c4]" />
@@ -184,8 +182,8 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
         </Card>
       )}
 
-      {/* MASTER: Quick Controls */}
-      {masteryLevel === "master" && (
+      {/* MASTER+: Quick Controls */}
+      {(masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-4 w-full bg-white">
           <h4 className="mb-3">Controles rápidos</h4>
           <div className="space-y-2">
@@ -239,15 +237,15 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
           {tasks.map((task) => (
             <Card 
               key={task.id} 
-              className={`p-4 ${masteryLevel === "expert" ? "cursor-move" : ""} ${
+              className={`p-4 ${(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") ? "cursor-move" : ""} ${
                 selectedTask === task.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""
               }`}
-              draggable={masteryLevel === "expert"}
-              onDragStart={() => masteryLevel === "expert" && setSelectedTask(task.id)}
+              draggable={masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary"}
+              onDragStart={() => (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && setSelectedTask(task.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {masteryLevel === "expert" && (
+                  {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                     <GripVertical className="w-4 h-4 text-muted-foreground" />
                   )}
                   <div className={`p-2 rounded-lg ${task.completed ? 'bg-[#e9f5f0] text-[#6fbd9d]' : 'bg-[#f5f3ed] text-[#d4a574]'}`}>
@@ -257,7 +255,7 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
                     <span className={task.completed ? 'text-muted-foreground line-through' : ''}>
                       {task.title}
                     </span>
-                    {(masteryLevel === "solver" || masteryLevel === "expert") && task.day && (
+                    {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && task.day && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">{task.day}</span>
                         {task.effort && (
@@ -277,7 +275,7 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
                   {!task.completed && masteryLevel === "novice" && (
                     <Circle className="w-5 h-5 text-[#d4a574]" />
                   )}
-                  {masteryLevel === "expert" && task.assignee && (
+                  {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && task.assignee && (
                     <Button variant="ghost" size="sm" className="h-6 px-2">
                       <Heart className="w-3 h-3" />
                     </Button>
