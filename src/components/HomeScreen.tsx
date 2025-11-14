@@ -124,9 +124,38 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
         setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
         toast.success('Paso completado');
       }
+      
+      // Update the assignment in the list locally without full reload
+      updateAssignmentProgress(currentTaskDialog.id);
     } catch (error) {
       console.error('Error toggling step:', error);
       toast.error('Error al actualizar paso');
+    }
+  };
+
+  const updateAssignmentProgress = async (assignmentId: number) => {
+    try {
+      const assignment = assignments.find(a => a.id === assignmentId);
+      if (!assignment || !assignment.task_steps || assignment.task_steps.length === 0) return;
+
+      const completions = await db.getStepCompletions(assignmentId);
+      const completedStepIds = new Set(completions.map(c => c.step_id));
+      const requiredSteps = assignment.task_steps.filter(s => !s.is_optional);
+      const completedRequiredCount = requiredSteps.filter(s => completedStepIds.has(s.id)).length;
+
+      // Update only this assignment in the state
+      setAssignments(prev => prev.map(a => 
+        a.id === assignmentId 
+          ? {
+              ...a,
+              completed_required_steps: completedRequiredCount,
+              total_required_steps: requiredSteps.length,
+              has_partial_progress: completedStepIds.size > 0
+            } as any
+          : a
+      ));
+    } catch (error) {
+      console.error('Error updating assignment progress:', error);
     }
   };
 
@@ -728,10 +757,13 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
                 <Button
                   variant="outline"
                   onClick={async () => {
+                    // Update progress one last time before closing
+                    if (currentTaskDialog) {
+                      await updateAssignmentProgress(currentTaskDialog.id);
+                    }
                     setTaskDialogOpen(false);
                     setCurrentTaskDialog(null);
                     setCompletedStepsInDialog(new Set());
-                    await loadData();
                   }}
                   className="w-full"
                 >
