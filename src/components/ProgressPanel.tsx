@@ -55,16 +55,7 @@ export function ProgressPanel({ masteryLevel }: ProgressPanelProps) {
     <div className="px-6 py-8 max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h1>Progreso del Hogar</h1>
-          <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
-            {masteryLevel === "novice" && "Novato"}
-            {masteryLevel === "solver" && "Solucionador"}
-            {masteryLevel === "expert" && "Experto"}
-            {masteryLevel === "master" && "Maestro"}
-            {masteryLevel === "visionary" && "Visionario"}
-          </Badge>
-        </div>
+        <h1 className="mb-2">Progreso del Hogar</h1>
         <p className="text-muted-foreground">
           {masteryLevel === "novice" && "Trabajando juntos hacia un espacio armonioso"}
           {masteryLevel === "solver" && "Analiza el rendimiento y optimiza"}
