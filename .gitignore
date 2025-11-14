@@ -108,6 +108,8 @@ temp/
 *.sln
 *.sw?
 
+package-lock.json
+
 # Vite
 dist-ssr/
 *.tsbuildinfo
