@@ -415,12 +415,11 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       <Button 
         size="lg" 
         className="w-full mb-6 h-14 bg-[#6fbd9d] hover:bg-[#5fa989]"
+        disabled={assignments.length === 0 || !assignments.some(a => a.status === 'pending')}
         onClick={() => {
-          const nextTask = assignments.find(a => a.status === 'pending');
-          if (nextTask) {
-            handleCompleteTask(nextTask.id);
-          } else {
-            toast.info('No hay tareas pendientes');
+          const firstPendingTask = assignments.find(a => a.status === 'pending');
+          if (firstPendingTask) {
+            openTaskDialog(firstPendingTask);
           }
         }}
       >
@@ -540,17 +539,6 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
             </div>
           </div>
         </Card>
-      )}
-
-      {/* NOVICE: Alternative Path Button */}
-      {masteryLevel === "novice" && (
-        <Button 
-          variant="outline" 
-          className="w-full mt-4"
-          onClick={() => toast.info('Funcionalidad próximamente - Podrás explorar diferentes estrategias')}
-        >
-          Probar otro camino
-        </Button>
       )}
 
       {/* Task Details Dialog */}
