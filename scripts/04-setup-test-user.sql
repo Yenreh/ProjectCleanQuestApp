@@ -1,17 +1,43 @@
 -- Script de configuración rápida del usuario de prueba
 -- Ejecuta este script DESPUÉS de crear el usuario en Supabase Auth
--- Reemplaza 'YOUR_USER_ID_HERE' con el UUID real del usuario
+-- Reemplaza el UUID con el ID real del usuario creado
 
 -- Variables (actualiza estas)
-\set user_id 'YOUR_USER_ID_HERE'
+\set user_id '00000000-0000-0000-0000-000000000000'
 \set user_email 'test@cleanquest.com'
 
--- 1. Actualizar el hogar de prueba
-UPDATE homes 
-SET created_by = :'user_id'
-WHERE name = 'Casa Demo';
+-- 1. Crear el hogar de prueba
+INSERT INTO homes (name, created_by, rotation_policy, auto_rotation, reminder_time)
+VALUES (
+  'Casa Demo',
+  :'user_id',
+  'weekly',
+  true,
+  '09:00:00'
+) ON CONFLICT DO NOTHING;
 
--- 2. Crear el miembro del hogar
+-- 2. Crear zonas del hogar
+INSERT INTO zones (home_id, name, icon)
+SELECT h.id, 'Cocina', 'utensils'
+FROM homes h WHERE h.name = 'Casa Demo'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO zones (home_id, name, icon)
+SELECT h.id, 'Baño', 'droplet'
+FROM homes h WHERE h.name = 'Casa Demo'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO zones (home_id, name, icon)
+SELECT h.id, 'Sala', 'sofa'
+FROM homes h WHERE h.name = 'Casa Demo'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO zones (home_id, name, icon)
+SELECT h.id, 'Habitaciones', 'bed'
+FROM homes h WHERE h.name = 'Casa Demo'
+ON CONFLICT DO NOTHING;
+
+-- 3. Crear el miembro del hogar
 INSERT INTO home_members (user_id, home_id, email, role, status, total_points, weeks_active, tasks_completed, current_streak, mastery_level, joined_at)
 SELECT 
   :'user_id',
@@ -38,7 +64,112 @@ SET
   current_streak = EXCLUDED.current_streak,
   mastery_level = EXCLUDED.mastery_level;
 
--- 3. Obtener el member_id para los siguientes pasos
+-- 4. Crear tareas de ejemplo
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Lavar platos',
+  'Lavar todos los platos y cubiertos',
+  'daily',
+  3,
+  'utensils',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Cocina'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Limpiar mesón',
+  'Limpiar y desinfectar el mesón de la cocina',
+  'daily',
+  2,
+  'sparkles',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Cocina'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Sacar basura',
+  'Sacar la basura y poner bolsa nueva',
+  'daily',
+  1,
+  'trash',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Cocina'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Limpiar baño',
+  'Limpiar sanitario, lavamanos y ducha',
+  'weekly',
+  5,
+  'droplet',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Baño'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Aspirar sala',
+  'Aspirar alfombra y limpiar muebles',
+  'weekly',
+  4,
+  'sofa',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Sala'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (home_id, zone_id, title, description, frequency, effort_points, icon, is_active)
+SELECT 
+  h.id,
+  z.id,
+  'Ordenar habitaciones',
+  'Recoger ropa y ordenar objetos',
+  'weekly',
+  3,
+  'bed',
+  true
+FROM homes h
+CROSS JOIN zones z
+WHERE h.name = 'Casa Demo' AND z.name = 'Habitaciones'
+ON CONFLICT DO NOTHING;
+
+-- 5. Crear desafío activo
+INSERT INTO challenges (home_id, title, description, challenge_type, start_date, end_date, points_reward, is_active)
+SELECT 
+  h.id,
+  'Semana Impecable',
+  'Completa todas las tareas de la semana',
+  'group',
+  CURRENT_DATE,
+  CURRENT_DATE + INTERVAL '7 days',
+  50,
+  true
+FROM homes h WHERE h.name = 'Casa Demo'
+ON CONFLICT DO NOTHING;
+
+-- 6. Obtener el member_id para los siguientes pasos
 DO $$
 DECLARE
   v_member_id INTEGER;
@@ -53,7 +184,7 @@ BEGIN
   RAISE NOTICE 'Member ID: %', v_member_id;
   RAISE NOTICE 'Home ID: %', v_home_id;
   
-  -- 4. Asignar tareas para hoy (3 tareas diarias)
+  -- 7. Asignar tareas para hoy (3 tareas diarias)
   FOR v_task_id IN 
     SELECT t.id 
     FROM tasks t
@@ -75,7 +206,7 @@ BEGIN
     RAISE NOTICE 'Assigned task: %', v_task_id;
   END LOOP;
   
-  -- 5. Asignar 1 tarea semanal
+  -- 8. Asignar 1 tarea semanal
   SELECT t.id INTO v_task_id
   FROM tasks t
   WHERE t.home_id = v_home_id
@@ -97,7 +228,7 @@ BEGIN
     RAISE NOTICE 'Assigned weekly task: %', v_task_id;
   END IF;
   
-  -- 6. Completar algunas tareas del pasado (para histórico)
+  -- 9. Completar algunas tareas del pasado (para histórico)
   FOR v_task_id IN 
     SELECT t.id 
     FROM tasks t
@@ -131,7 +262,7 @@ BEGIN
     END IF;
   END LOOP;
   
-  -- 7. Desbloquear algunos logros
+  -- 10. Desbloquear algunos logros
   INSERT INTO member_achievements (member_id, achievement_id, unlocked_at)
   SELECT 
     v_member_id,
@@ -141,7 +272,7 @@ BEGIN
   WHERE a.name IN ('first_week', 'team_player', 'solver')
   ON CONFLICT DO NOTHING;
   
-  -- 8. Unir al desafío activo
+  -- 11. Unir al desafío activo
   INSERT INTO challenge_participants (challenge_id, member_id, status, points_earned)
   SELECT 
     c.id,
