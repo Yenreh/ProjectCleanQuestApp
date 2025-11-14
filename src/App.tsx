@@ -242,7 +242,7 @@ export default function App() {
                 <DropdownMenuSeparator />
                 
                 {/* Mi Perfil */}
-                <DropdownMenuItem onClick={() => toast.info("Abriendo perfil...")}>
+                <DropdownMenuItem onClick={() => toast.info("Funcionalidad de perfil próximamente")}>
                   <User className="w-4 h-4 mr-2" />
                   <span>Mi perfil</span>
                 </DropdownMenuItem>
@@ -254,19 +254,19 @@ export default function App() {
                     <span>Administrar casa</span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar tareas...")}>
+                    <DropdownMenuItem onClick={() => toast.info("Gestionar tareas próximamente")}>
                       <ListTodo className="w-4 h-4 mr-2" />
                       <span>Gestionar tareas</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar zonas...")}>
+                    <DropdownMenuItem onClick={() => toast.info("Gestionar zonas próximamente")}>
                       <Sparkles className="w-4 h-4 mr-2" />
                       <span>Gestionar zonas</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar miembros...")}>
+                    <DropdownMenuItem onClick={() => toast.info("Gestionar miembros próximamente")}>
                       <Users className="w-4 h-4 mr-2" />
                       <span>Gestionar miembros</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Configurar recordatorios...")}>
+                    <DropdownMenuItem onClick={() => toast.info("Configurar recordatorios próximamente")}>
                       <Clock className="w-4 h-4 mr-2" />
                       <span>Recordatorios</span>
                     </DropdownMenuItem>
@@ -276,13 +276,13 @@ export default function App() {
                 <DropdownMenuSeparator />
                 
                 {/* Configuración general */}
-                <DropdownMenuItem onClick={() => toast.info("Configuración general...")}>
+                <DropdownMenuItem onClick={() => toast.info("Configuración general próximamente")}>
                   <Settings className="w-4 h-4 mr-2" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
 
                 {/* Selector de nivel de maestría (solo en modo DEV) */}
-                {import.meta.env.VITE_DEV_MODE === 'true' && (
+                {(import.meta as any).env?.VITE_DEV_MODE === 'true' && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-xs text-muted-foreground">

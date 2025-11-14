@@ -29,6 +29,33 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
   const [rotationPolicy, setRotationPolicy] = useState("weekly");
   const [autoRotation, setAutoRotation] = useState(true);
 
+  const handleUpdateGoal = async () => {
+    if (!homeId) return;
+    
+    try {
+      await db.updateHome(homeId, { goal_percentage: parseInt(goalPercentage) });
+      toast.success('Meta actualizada');
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      toast.error('Error al actualizar meta');
+    }
+  };
+
+  const handleUpdateRotation = async () => {
+    if (!homeId) return;
+    
+    try {
+      await db.updateHome(homeId, { 
+        rotation_policy: rotationPolicy as any,
+        auto_rotation: autoRotation 
+      });
+      toast.success('Política de rotación actualizada');
+    } catch (error) {
+      console.error('Error updating rotation:', error);
+      toast.error('Error al actualizar rotación');
+    }
+  };
+
   useEffect(() => {
     if (currentMember && homeId) {
       loadData();
@@ -64,6 +91,10 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
     { id: 1, name: "Semana de exámenes", description: "Reduce tareas en 50%", active: false },
     { id: 2, name: "Visitas familiares", description: "Intensifica limpieza previa", active: false },
   ];
+
+  const handleToggleTemplate = (templateId: number) => {
+    toast.info(`Plantilla ${templateId === 1 ? 'Semana de exámenes' : 'Visitas familiares'} ${templates.find(t => t.id === templateId)?.active ? 'desactivada' : 'activada'}`);
+  };
 
   const changelog = [
     { date: "2 Nov 2025", change: "Meta grupal actualizada a 80%", author: "Ana" },
@@ -162,6 +193,13 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
                     Meta actual: {goalPercentage}% de completitud semanal
                   </p>
                 </div>
+                <Button 
+                  size="sm" 
+                  className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+                  onClick={handleUpdateGoal}
+                >
+                  Guardar meta
+                </Button>
               </div>
             </Card>
 
@@ -189,6 +227,13 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
                   <Label>Rotación automática</Label>
                   <Switch checked={autoRotation} onCheckedChange={setAutoRotation} />
                 </div>
+                <Button 
+                  size="sm" 
+                  className="w-full bg-[#d4a574] hover:bg-[#c49565]"
+                  onClick={handleUpdateRotation}
+                >
+                  Guardar rotación
+                </Button>
               </div>
             </Card>
           </TabsContent>
@@ -213,11 +258,18 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
                       <p className="text-sm">{template.name}</p>
                       <p className="text-xs text-muted-foreground">{template.description}</p>
                     </div>
-                    <Switch checked={template.active} />
+                    <Switch 
+                      checked={template.active}
+                      onCheckedChange={() => handleToggleTemplate(template.id)}
+                    />
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full mt-4">
+              <Button 
+                variant="outline" 
+                className="w-full mt-4"
+                onClick={() => toast.info('Crear plantilla personalizada próximamente')}
+              >
                 + Crear plantilla personalizada
               </Button>
             </Card>
@@ -237,7 +289,12 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
                     Cada roomie debe tener carga similar (±15%)
                   </p>
                   <div className="flex gap-2 mt-2">
-                    <Button variant="ghost" size="sm" className="text-xs">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs"
+                      onClick={() => toast.info('Editar acuerdo próximamente')}
+                    >
                       Editar
                     </Button>
                   </div>
@@ -249,13 +306,22 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
                     Ayuda mutua con consenso permitida
                   </p>
                   <div className="flex gap-2 mt-2">
-                    <Button variant="ghost" size="sm" className="text-xs">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs"
+                      onClick={() => toast.info('Editar acuerdo próximamente')}
+                    >
                       Editar
                     </Button>
                   </div>
                 </div>
 
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => toast.info('Agregar nuevo acuerdo próximamente')}
+                >
                   + Agregar nuevo acuerdo
                 </Button>
               </div>
@@ -388,11 +454,20 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
             </div>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]">
+            <Button 
+              size="sm" 
+              className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
+              onClick={() => toast.success('Cambio adoptado exitosamente')}
+            >
               <CheckCircle2 className="w-4 h-4 mr-1" />
               Adoptar cambio
             </Button>
-            <Button size="sm" variant="outline" className="flex-1">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => toast.info('Cambio revertido')}
+            >
               Revertir
             </Button>
           </div>
@@ -401,11 +476,20 @@ export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoom
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-4">
-        <Button variant="outline" size="lg" className="h-14">
+        <Button 
+          variant="outline" 
+          size="lg" 
+          className="h-14"
+          onClick={() => toast.info('Estadísticas detalladas próximamente')}
+        >
           <BarChart3 className="w-5 h-5 mr-2" />
           Ver estadísticas
         </Button>
-        <Button size="lg" className="h-14 bg-[#6fbd9d] hover:bg-[#5fa989]">
+        <Button 
+          size="lg" 
+          className="h-14 bg-[#6fbd9d] hover:bg-[#5fa989]"
+          onClick={() => toast.info('Configuración semanal próximamente')}
+        >
           <Calendar className="w-5 h-5 mr-2" />
           {masteryLevel === "master" || masteryLevel === "visionary" 
             ? "Configurar semana"

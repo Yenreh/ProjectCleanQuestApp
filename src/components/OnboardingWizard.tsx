@@ -163,6 +163,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     toast.success(`Invitación reenviada a ${email}`);
   };
 
+  const handleRemoveRoommate = (email: string) => {
+    setRoommates(prev => prev.filter(r => r.email !== email));
+    toast.info(`Invitación a ${email} eliminada`);
+  };
+
   const handleCompleteRoommates = () => {
     setCompletedSteps(prev => new Set([...prev, "add-roommates"]));
     if (!completedSteps.has("add-tasks")) {
@@ -519,20 +524,31 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 ) : (
                   roommates.map((roommate, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg">
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm">{roommate.email}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className="text-xs">{roommate.role}</Badge>
                           <span className="text-xs text-muted-foreground">{roommate.status}</span>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleResendInvite(roommate.email)}
-                      >
-                        <Link2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleResendInvite(roommate.email)}
+                          title="Reenviar invitación"
+                        >
+                          <Link2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveRoommate(roommate.email)}
+                          title="Eliminar invitación"
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}

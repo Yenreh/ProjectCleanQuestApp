@@ -24,6 +24,8 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [showCalculation, setShowCalculation] = useState(false);
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<number | null>(null);
+  const [quickProposal, setQuickProposal] = useState("");
   
   const userName = currentMember?.email?.split('@')[0] || "Usuario";
 
@@ -60,10 +62,49 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
     try {
       await db.completeTask(assignmentId, currentMember.id);
       toast.success('¡Tarea completada!');
-      await loadData(); // Reload data
+      await loadData();
     } catch (error) {
       console.error('Error completing task:', error);
       toast.error('Error al completar tarea');
+    }
+  };
+
+  const handleRequestReassignment = async () => {
+    if (!selectedTask || !reassignTarget) {
+      toast.error('Selecciona una tarea y un compañero');
+      return;
+    }
+
+    try {
+      await db.requestTaskExchange(currentMember!.id, selectedTask, 'swap', reassignTarget);
+      toast.success('Solicitud de intercambio enviada');
+      setSelectedTask(null);
+      setReassignTarget(null);
+    } catch (error) {
+      console.error('Error requesting reassignment:', error);
+      toast.error('Error al solicitar reasignación');
+    }
+  };
+
+  const handleQuickProposal = async () => {
+    if (!quickProposal.trim() || !homeId || !currentMember) {
+      toast.error('Escribe una idea primero');
+      return;
+    }
+
+    try {
+      await db.createProposal(homeId, currentMember.id, {
+        title: quickProposal,
+        hypothesis: 'Propuesta rápida desde la vista principal',
+        status: 'pending',
+        votes_yes: 0,
+        votes_no: 0
+      });
+      toast.success('Propuesta enviada a votación');
+      setQuickProposal('');
+    } catch (error) {
+      console.error('Error creating proposal:', error);
+      toast.error('Error al enviar propuesta');
     }
   };
 
@@ -211,7 +252,7 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
             <TrendingUp className="w-5 h-5 text-[#89a7c4]" />
             <h4>Impacto si reasignas</h4>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="p-3 bg-white rounded-lg">
               <p className="text-xs text-muted-foreground mb-1">Completitud</p>
               <div className="flex items-center gap-2">
@@ -231,6 +272,22 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
               </div>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              className="flex-1 bg-[#89a7c4] hover:bg-[#7496b0]"
+              onClick={handleRequestReassignment}
+            >
+              Solicitar reasignación
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setSelectedTask(null)}
+            >
+              Cancelar
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -239,18 +296,27 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
         <Card className="p-4 mb-4 w-full bg-white">
           <h4 className="mb-3">Controles rápidos</h4>
           <div className="space-y-2">
-            <div className="flex items-center justify-between p-2 bg-[#f5f3ed] rounded">
+            <button 
+              onClick={() => toast.info('Configuración de meta grupal próximamente')}
+              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
+            >
               <span className="text-sm">Meta grupal:</span>
               <Badge variant="outline">80%</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-[#f5f3ed] rounded">
+            </button>
+            <button 
+              onClick={() => toast.info('Configuración de rotación próximamente')}
+              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
+            >
               <span className="text-sm">Rotación:</span>
               <Badge variant="outline">Semanal</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-[#f5f3ed] rounded">
+            </button>
+            <button 
+              onClick={() => toast.info('Configuración de recordatorios próximamente')}
+              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
+            >
               <span className="text-sm">Recordatorios:</span>
               <Badge className="bg-[#6fbd9d]">09:00</Badge>
-            </div>
+            </button>
           </div>
         </Card>
       )}
@@ -259,8 +325,18 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
       {masteryLevel === "visionary" && (
         <Card className="p-4 mb-4 w-full bg-[#fef3e0]">
           <h4 className="mb-2">💡 Propuesta rápida</h4>
-          <Input placeholder="Nueva idea de mejora..." className="mb-2 text-sm" />
-          <Button size="sm" className="w-full bg-[#d4a574] hover:bg-[#c49565]">
+          <Input 
+            placeholder="Nueva idea de mejora..." 
+            className="mb-2 text-sm"
+            value={quickProposal}
+            onChange={(e) => setQuickProposal(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleQuickProposal()}
+          />
+          <Button 
+            size="sm" 
+            className="w-full bg-[#d4a574] hover:bg-[#c49565]"
+            onClick={handleQuickProposal}
+          >
             Enviar a votación
           </Button>
         </Card>
@@ -270,6 +346,14 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
       <Button 
         size="lg" 
         className="w-full mb-6 h-14 bg-[#6fbd9d] hover:bg-[#5fa989]"
+        onClick={() => {
+          const nextTask = assignments.find(a => a.status === 'pending');
+          if (nextTask) {
+            handleCompleteTask(nextTask.id);
+          } else {
+            toast.info('No hay tareas pendientes');
+          }
+        }}
       >
         {masteryLevel === "visionary" ? "Iniciar experimento de hoy" : "Cumplir tarea de hoy"}
       </Button>
@@ -384,7 +468,11 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
 
       {/* NOVICE: Alternative Path Button */}
       {masteryLevel === "novice" && (
-        <Button variant="outline" className="w-full mt-4">
+        <Button 
+          variant="outline" 
+          className="w-full mt-4"
+          onClick={() => toast.info('Funcionalidad próximamente - Podrás explorar diferentes estrategias')}
+        >
           Probar otro camino
         </Button>
       )}

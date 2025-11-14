@@ -200,7 +200,12 @@ export function ProgressPanel({ masteryLevel, currentMember, homeId }: ProgressP
                     <span className="text-sm">Umbral de rotación</span>
                     <Badge variant="outline">33%</Badge>
                   </div>
-                  <Button variant="outline" className="w-full" size="sm">
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    size="sm"
+                    onClick={() => toast.info('Editar configuración próximamente')}
+                  >
                     <Settings className="w-4 h-4 mr-2" />
                     Editar configuración
                   </Button>

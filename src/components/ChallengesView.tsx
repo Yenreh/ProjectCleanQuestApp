@@ -151,6 +151,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
           </div>
           <Button 
             onClick={() => handleJoinChallenge(challenge.id)}
+            disabled={!currentMember}
             className={challenge.challenge_type === "group" 
               ? "w-full bg-[#6fbd9d] hover:bg-[#5fa989]" 
               : "w-full bg-[#d4a574] hover:bg-[#c09464]"
@@ -241,6 +242,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
                 <Button 
                   onClick={handleCreateProposal}
                   className="w-full bg-[#d4a574] hover:bg-[#c49565]"
+                  disabled={!proposalTitle.trim() || !hypothesis.trim()}
                 >
                   Enviar propuesta
                 </Button>
@@ -284,6 +286,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
                   <Button 
                     size="sm" 
                     onClick={() => handleVote(proposal.id, true)}
+                    disabled={!currentMember}
                     className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
                   >
                     <ThumbsUp className="w-4 h-4 mr-1" />
@@ -293,6 +296,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
                     size="sm" 
                     variant="outline" 
                     onClick={() => handleVote(proposal.id, false)}
+                    disabled={!currentMember}
                     className="flex-1"
                   >
                     <ThumbsDown className="w-4 h-4 mr-1" />
@@ -327,7 +331,11 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
               <Trophy className="w-4 h-4 text-[#d4a574]" />
               <span className="text-sm">+100 puntos</span>
             </div>
-            <Button size="sm" className="bg-[#89a7c4] hover:bg-[#7496b0]">
+            <Button 
+              size="sm" 
+              className="bg-[#89a7c4] hover:bg-[#7496b0]"
+              onClick={() => toast.info('Funcionalidad de estrategia próximamente')}
+            >
               Ver estrategia
             </Button>
           </div>
