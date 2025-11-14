@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Card } from "./ui/card"
 import { Button } from "./ui/button"
-import { Input } from "./ui/input"
+import { InputWithIcon } from "./ui/input-with-icon"
 import { Label } from "./ui/label"
 import { Sparkles, Mail, Lock, User } from "lucide-react"
 import { db } from "../lib/db"
@@ -40,70 +40,65 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fafaf9] via-[#f5f3ed] to-[#e9f5f0] flex items-center justify-center px-6 py-8">
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <div className="inline-block p-4 rounded-full bg-gradient-to-br from-[#e9f5f0] to-[#d0ebe0] mb-4">
-            <Sparkles className="w-12 h-12 text-[#6fbd9d]" />
+    <div className="min-h-screen bg-gradient-to-br from-[#fafaf9] via-[#f5f3ed] to-[#e9f5f0] flex items-center justify-center p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-md">
+        <Card className="p-6 sm:p-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="inline-flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 rounded-full from-[#e9f5f0] to-[#d0ebe0] mb-4">
+              <Sparkles className="w-12 h-12 sm:w-14 sm:h-14 text-[#6fbd9d]" strokeWidth={2.5} />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-semibold mb-2">CleanQuest</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Gamifica la limpieza de tu hogar
+            </p>
           </div>
-          <h1 className="text-3xl mb-2">CleanQuest</h1>
-          <p className="text-muted-foreground">
-            Gamifica la limpieza de tu hogar
-          </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
           {!isLogin && (
-            <div>
-              <Label htmlFor="fullName">Nombre completo</Label>
-              <div className="relative mt-1">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Ana García"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="pl-10"
-                  required={!isLogin}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-sm font-medium">Nombre completo</Label>
+              <InputWithIcon
+                id="fullName"
+                type="text"
+                placeholder="Ana García"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="h-11"
+                icon={<User className="w-4 h-4 text-muted-foreground" />}
+                required={!isLogin}
+              />
             </div>
           )}
 
-          <div>
-            <Label htmlFor="email">Correo electrónico</Label>
-            <div className="relative mt-1">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium">Correo electrónico</Label>
+            <InputWithIcon
+              id="email"
+              type="email"
+              placeholder="tu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-11"
+              icon={<Mail className="w-4 h-4 text-muted-foreground" />}
+              required
+            />
           </div>
 
-          <div>
-            <Label htmlFor="password">Contraseña</Label>
-            <div className="relative mt-1">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10"
-                required
-                minLength={6}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium">Contraseña</Label>
+            <InputWithIcon
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-11"
+              icon={<Lock className="w-4 h-4 text-muted-foreground" />}
+              required
+              minLength={6}
+            />
             {!isLogin && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-2">
                 Mínimo 6 caracteres
               </p>
             )}
@@ -111,7 +106,7 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
 
           <Button
             type="submit"
-            className="w-full h-12 bg-[#6fbd9d] hover:bg-[#5fa989]"
+            className="w-full h-12 bg-[#6fbd9d] hover:bg-[#5fa989] mt-6"
             disabled={loading}
           >
             {loading
@@ -121,11 +116,11 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
               : "Crear cuenta"}
           </Button>
 
-          <div className="text-center">
+          <div className="text-center pt-4">
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-[#6fbd9d] hover:underline"
+              className="text-sm text-[#6fbd9d] hover:underline font-medium"
             >
               {isLogin
                 ? "¿No tienes cuenta? Regístrate"
@@ -135,12 +130,13 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
         </form>
 
         <div className="mt-6 pt-6 border-t border-border">
-          <p className="text-xs text-center text-muted-foreground">
+          <p className="text-xs text-center text-muted-foreground leading-relaxed">
             Al continuar, aceptas nuestros términos de servicio y política de
             privacidad
           </p>
         </div>
       </Card>
+      </div>
     </div>
   )
 }
