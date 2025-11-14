@@ -245,7 +245,7 @@ export function ProgressPanel({ masteryLevel, currentMember, homeId }: ProgressP
         </div>
         <div className="space-y-4">
           {members.map((member) => {
-            const memberName = member.email?.split('@')[0] || 'Usuario';
+            const memberName = member.full_name || member.email?.split('@')[0] || 'Usuario';
             const memberInitials = memberName.substring(0, 2).toUpperCase();
             const colors = ['bg-[#a8d5e2]', 'bg-[#d4a574]', 'bg-[#c8b5d3]', 'bg-[#6fbd9d]'];
             const colorIndex = member.id % colors.length;

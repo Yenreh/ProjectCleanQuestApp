@@ -284,12 +284,20 @@ export const db = {
     
     const { data, error } = await supabase
       .from('home_members')
-      .select('*')
+      .select(`
+        *,
+        profiles!home_members_user_id_fkey(full_name)
+      `)
       .eq('home_id', homeId)
       .order('created_at', { ascending: true })
     
     if (error) throw error
-    return data
+    
+    // Map the data to include full_name directly in the HomeMember object
+    return data.map(member => ({
+      ...member,
+      full_name: member.profiles?.full_name
+    }))
   },
 
   async updateMember(memberId: number, updates: Partial<HomeMember>) {

@@ -195,7 +195,7 @@ export default function App() {
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
-        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
+        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
       case "progress":
         return <ProgressPanel masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "challenges":
@@ -203,7 +203,7 @@ export default function App() {
       case "harmony":
         return <HarmonyRoom masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       default:
-        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
+        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
     }
   };
 

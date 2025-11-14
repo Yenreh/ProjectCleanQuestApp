@@ -9,17 +9,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collap
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { db } from "../lib/db";
 import { toast } from "sonner";
-import type { AssignmentWithDetails, HomeMember, HomeMetrics } from "../lib/types";
+import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
 interface HomeScreenProps {
   masteryLevel: MasteryLevel;
   currentMember?: HomeMember | null;
+  currentUser?: Profile | null;
   homeId?: number | null;
 }
 
-export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenProps) {
+export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }: HomeScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
@@ -31,7 +32,7 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
   const [currentTaskDialog, setCurrentTaskDialog] = useState<AssignmentWithDetails | null>(null);
   const [completedStepsInDialog, setCompletedStepsInDialog] = useState<Set<number>>(new Set());
   
-  const userName = currentMember?.email?.split('@')[0] || "Usuario";
+  const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
 
   // Load tasks and metrics
   useEffect(() => {
@@ -208,7 +209,7 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
       {/* Header */}
       <div className="w-full mb-6">
         <div className="flex items-center justify-between mb-2">
-          <h1>¡Bienvenido, {userName}!</h1>
+          <h1>¡Bienvenido/a, {userName}!</h1>
           <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
             {masteryLevel === "novice" && "Novato"}
             {masteryLevel === "solver" && "Solucionador"}

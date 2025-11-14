@@ -62,6 +62,7 @@ export interface HomeMember {
   home_id: number
   user_id?: string
   email: string
+  full_name?: string
   role: MemberRole
   status: MemberStatus
   invitation_token?: string
