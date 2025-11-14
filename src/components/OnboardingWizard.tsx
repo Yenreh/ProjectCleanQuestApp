@@ -197,6 +197,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
 
         // Create tasks in backend for each selected task id
+        const zones = await db.getZones(createdHomeId);
+        
         for (const tId of selectedTasks) {
           const template = taskTemplates.find(t => t.id === tId);
           if (!template) continue;
@@ -205,25 +207,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           const frequency = (freqMap as any)[template.frequency] || 'weekly';
           
           // Find zone_id for this task
-          const zones = await db.getZones(createdHomeId);
           const matchingZone = zones.find(z => z.name === template.zone);
           
-          // Persist a global task template (catalog) and also create the home task
-          try {
-            await db.createTaskTemplate({
-              name: template.name,
-              title: template.title,
-              description: '',
-              icon: template.icon,
-              zone: template.zone,
-              frequency: frequency as any,
-              effort_points: template.effort_points
-            } as any);
-          } catch (tplErr) {
-            // ignore duplicate or other non-fatal errors
-            console.warn('Task template create error', tplErr);
-          }
-
+          // Note: We don't create task_templates here because they already exist from seed data
+          // We only create task instances for this specific home
+          
           // Create task instance for this home with zone_id
           const createdTask = await db.createTask(createdHomeId, {
             title: template.title,
@@ -233,10 +221,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             frequency,
             effort_points: template.effort_points,
             is_active: true,
-            is_template: true
+            is_template: false
           } as any);
 
-          // Create steps for this task
+          // Create steps for this task (copying from template)
           if (template.steps && createdTask) {
             for (const step of template.steps) {
               try {
