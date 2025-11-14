@@ -87,9 +87,13 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     
     try {
       if (isCompleted) {
-        // Currently we don't have an uncomplete step function, so just update UI
-        toast.info('Marcar pasos como no completados próximamente');
-        return;
+        await db.uncompleteTaskStep(stepId, currentTaskDialog.id);
+        setCompletedStepsInDialog(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(stepId);
+          return newSet;
+        });
+        toast.success('Paso desmarcado');
       } else {
         await db.completeTaskStep(stepId, currentTaskDialog.id, currentMember.id);
         setCompletedStepsInDialog(prev => new Set([...prev, stepId]));

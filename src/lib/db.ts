@@ -525,6 +525,18 @@ export const db = {
     return data
   },
 
+  async uncompleteTaskStep(stepId: number, assignmentId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase
+      .from('task_step_completions')
+      .delete()
+      .eq('step_id', stepId)
+      .eq('assignment_id', assignmentId)
+
+    if (error) throw error
+  },
+
   async getStepCompletions(assignmentId: number) {
     if (!supabase) return []
 
