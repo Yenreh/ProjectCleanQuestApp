@@ -27,6 +27,9 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
   const [reassignTarget, setReassignTarget] = useState<number | null>(null);
   const [quickProposal, setQuickProposal] = useState("");
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [currentTaskDialog, setCurrentTaskDialog] = useState<AssignmentWithDetails | null>(null);
+  const [completedStepsInDialog, setCompletedStepsInDialog] = useState<Set<number>>(new Set());
   
   const userName = currentMember?.email?.split('@')[0] || "Usuario";
 
@@ -54,6 +57,70 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
       toast.error('Error al cargar tareas');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openTaskDialog = async (assignment: AssignmentWithDetails) => {
+    console.log('Opening task dialog for:', assignment.task_title);
+    setCurrentTaskDialog(assignment);
+    
+    // Load completed steps for this assignment
+    if (assignment.task_steps && assignment.task_steps.length > 0) {
+      try {
+        const completions = await db.getStepCompletions(assignment.id);
+        const completedStepIds = new Set(completions.map(c => c.step_id));
+        setCompletedStepsInDialog(completedStepIds);
+      } catch (error) {
+        console.error('Error loading step completions:', error);
+      }
+    }
+    
+    setTaskDialogOpen(true);
+    console.log('Dialog state set to true');
+  };
+
+  const handleToggleStep = async (stepId: number) => {
+    if (!currentTaskDialog || !currentMember) return;
+
+    const isCompleted = completedStepsInDialog.has(stepId);
+    
+    try {
+      if (isCompleted) {
+        // Currently we don't have an uncomplete step function, so just update UI
+        toast.info('Marcar pasos como no completados próximamente');
+        return;
+      } else {
+        await db.completeTaskStep(stepId, currentTaskDialog.id, currentMember.id);
+        setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
+        toast.success('Paso completado');
+      }
+    } catch (error) {
+      console.error('Error toggling step:', error);
+      toast.error('Error al actualizar paso');
+    }
+  };
+
+  const handleCompleteTaskFromDialog = async () => {
+    if (!currentTaskDialog || !currentMember) return;
+
+    const totalSteps = currentTaskDialog.task_steps?.length || 0;
+    const completedSteps = completedStepsInDialog.size;
+
+    if (totalSteps > 0 && completedSteps < totalSteps) {
+      toast.error(`Completa todos los pasos (${completedSteps}/${totalSteps})`);
+      return;
+    }
+
+    try {
+      await db.completeTask(currentTaskDialog.id, currentMember.id);
+      toast.success('¡Tarea completada!');
+      setTaskDialogOpen(false);
+      setCurrentTaskDialog(null);
+      setCompletedStepsInDialog(new Set());
+      await loadData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+      toast.error('Error al completar tarea');
     }
   };
 
@@ -374,14 +441,19 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
           {assignments.map((assignment) => (
             <Card 
               key={assignment.id} 
-              className={`p-4 ${(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") ? "cursor-move" : ""} ${
-                selectedTask === assignment.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""
-              }`}
+              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") ? "cursor-move" : ""
+              } ${selectedTask === assignment.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""}`}
               draggable={masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary"}
               onDragStart={() => (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && setSelectedTask(assignment.id)}
+              onClick={() => {
+                if (assignment.status !== 'completed') {
+                  openTaskDialog(assignment);
+                }
+              }}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1">
                   {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                     <GripVertical className="w-4 h-4 text-muted-foreground" />
                   )}
@@ -428,16 +500,18 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
                   ) : (
                     <>
                       {masteryLevel === "novice" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCompleteTask(assignment.id)}
-                        >
-                          <Circle className="w-5 h-5 text-[#d4a574]" />
-                        </Button>
+                        <Circle className="w-5 h-5 text-[#d4a574]" />
                       )}
                       {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
-                        <Button variant="ghost" size="sm" className="h-6 px-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 px-2"
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            toast.info('Marcar como favorito próximamente');
+                          }}
+                        >
                           <Heart className="w-3 h-3" />
                         </Button>
                       )}
@@ -477,6 +551,121 @@ export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenPr
           Probar otro camino
         </Button>
       )}
+
+      {/* Task Details Dialog */}
+      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+        <DialogContent className="max-w-md">
+          {currentTaskDialog ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-[#f5f3ed] text-[#d4a574]">
+                    {getTaskIcon(currentTaskDialog.task_icon)}
+                  </div>
+                  <span>{currentTaskDialog.task_title}</span>
+                </DialogTitle>
+                {currentTaskDialog.task_zone_name && (
+                  <DialogDescription>
+                    Zona: {currentTaskDialog.task_zone_name} • {currentTaskDialog.task_effort} puntos
+                  </DialogDescription>
+                )}
+              </DialogHeader>
+
+              <div className="space-y-4 mt-4">
+                {currentTaskDialog.task_steps && currentTaskDialog.task_steps.length > 0 ? (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium">Pasos a seguir:</h4>
+                        <span className="text-xs text-muted-foreground">
+                          {completedStepsInDialog.size}/{currentTaskDialog.task_steps.length}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={(completedStepsInDialog.size / currentTaskDialog.task_steps.length) * 100} 
+                        className="h-2 mb-4" 
+                      />
+                      
+                      {currentTaskDialog.task_steps
+                        .sort((a, b) => a.step_order - b.step_order)
+                        .map((step) => {
+                          const isCompleted = completedStepsInDialog.has(step.id);
+                          return (
+                            <button
+                              key={step.id}
+                              onClick={() => handleToggleStep(step.id)}
+                              className={`w-full p-3 rounded-lg text-left transition-all ${
+                                isCompleted 
+                                  ? 'bg-[#e9f5f0] border-2 border-[#6fbd9d]' 
+                                  : 'bg-[#f5f3ed] hover:bg-[#ebe9e0]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                {isCompleted ? (
+                                  <CheckCircle2 className="w-5 h-5 text-[#6fbd9d] flex-shrink-0" />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border-2 border-[#d4a574] flex-shrink-0" />
+                                )}
+                                <div className="flex-1">
+                                  <span className={`text-sm ${isCompleted ? 'text-[#5fa989] line-through' : ''}`}>
+                                    {step.step_order}. {step.title}
+                                  </span>
+                                  {step.is_optional && (
+                                    <Badge variant="outline" className="ml-2 text-xs">
+                                      Opcional
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    <Button
+                      onClick={handleCompleteTaskFromDialog}
+                      className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+                      disabled={completedStepsInDialog.size < currentTaskDialog.task_steps.length}
+                    >
+                      Marcar tarea como completada
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-4 bg-[#f5f3ed] rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">
+                        Esta tarea no tiene pasos definidos
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleCompleteTaskFromDialog}
+                      className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+                    >
+                      Marcar como completada
+                    </Button>
+                  </>
+                )}
+
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setTaskDialogOpen(false);
+                    setCurrentTaskDialog(null);
+                    setCompletedStepsInDialog(new Set());
+                  }}
+                  className="w-full"
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="p-4">
+              <p>Cargando...</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
