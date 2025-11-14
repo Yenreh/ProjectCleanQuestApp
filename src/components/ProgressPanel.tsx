@@ -1,55 +1,78 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
-import { Trophy, Users, CheckCircle2, Lightbulb, BarChart3, Settings, Target, Clock } from "lucide-react";
+import { Trophy, Users, CheckCircle2, Lightbulb, BarChart3, Settings, Target, Clock, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-
-interface Member {
-  id: string;
-  name: string;
-  initials: string;
-  tasksCompleted: number;
-  color: string;
-}
-
-interface CompletedTask {
-  id: string;
-  task: string;
-  member: string;
-  day: string;
-}
+import { db } from "../lib/db";
+import { toast } from "sonner";
+import type { HomeMember, HomeMetrics, Achievement } from "../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
 interface ProgressPanelProps {
   masteryLevel: MasteryLevel;
+  currentMember?: HomeMember | null;
+  homeId?: number | null;
 }
 
-export function ProgressPanel({ masteryLevel }: ProgressPanelProps) {
-  const houseLevel = 78;
+export function ProgressPanel({ masteryLevel, currentMember, homeId }: ProgressPanelProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
+  const [members, setMembers] = useState<HomeMember[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   
-  const members: Member[] = [
-    { id: "1", name: "Ana", initials: "AN", tasksCompleted: 8, color: "bg-[#a8d5e2]" },
-    { id: "2", name: "Carlos", initials: "CA", tasksCompleted: 7, color: "bg-[#d4a574]" },
-    { id: "3", name: "María", initials: "MA", tasksCompleted: 8, color: "bg-[#c8b5d3]" },
-  ];
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId]);
 
-  const completedTasks: CompletedTask[] = [
-    { id: "1", task: "Cocina limpia", member: "Ana", day: "Lunes" },
-    { id: "2", task: "Baño organizado", member: "Carlos", day: "Martes" },
-    { id: "3", task: "Sala ordenada", member: "María", day: "Miércoles" },
-    { id: "4", task: "Basura sacada", member: "Ana", day: "Jueves" },
-    { id: "5", task: "Platos lavados", member: "Carlos", day: "Viernes" },
-  ];
+  const loadData = async () => {
+    if (!homeId || !currentMember) return;
+    
+    setIsLoading(true);
+    try {
+      const [homeMetrics, homeMembers, memberAchievements] = await Promise.all([
+        db.getHomeMetrics(homeId),
+        db.getHomeMembers(homeId),
+        db.getMemberAchievements(currentMember.id)
+      ]);
+      
+      setMetrics(homeMetrics);
+      setMembers(homeMembers.filter(m => m.status === 'active'));
+      setAchievements(memberAchievements);
+    } catch (error) {
+      console.error('Error loading progress data:', error);
+      toast.error('Error al cargar datos de progreso');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const houseLevel = metrics?.completion_percentage || 0;
+  
   const suggestions = [
     { title: "Combinar tareas de cocina", impact: "+12%", effort: "bajo" },
     { title: "Ajustar frecuencia de baño", impact: "+8%", effort: "medio" },
   ];
+
+  const changelog = [
+    { date: "2 Nov 2025", change: "Meta grupal actualizada a 80%", author: "Ana" },
+    { date: "28 Oct 2025", change: "Rotación cambiada a semanal", author: "Carlos" },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-[#6fbd9d] animate-spin mb-4" />
+        <p className="text-muted-foreground">Cargando progreso...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 py-8 max-w-2xl mx-auto">
@@ -216,24 +239,31 @@ export function ProgressPanel({ masteryLevel }: ProgressPanelProps) {
           <h3>Colaboradores del hogar</h3>
         </div>
         <div className="space-y-4">
-          {members.map((member) => (
-            <div key={member.id} className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar className={member.color}>
-                  <AvatarFallback>{member.initials}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p>{member.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {member.tasksCompleted} tareas completadas
-                  </p>
+          {members.map((member) => {
+            const memberName = member.email?.split('@')[0] || 'Usuario';
+            const memberInitials = memberName.substring(0, 2).toUpperCase();
+            const colors = ['bg-[#a8d5e2]', 'bg-[#d4a574]', 'bg-[#c8b5d3]', 'bg-[#6fbd9d]'];
+            const colorIndex = member.id % colors.length;
+            
+            return (
+              <div key={member.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar className={colors[colorIndex]}>
+                    <AvatarFallback>{memberInitials}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p>{memberName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {member.tasks_completed || 0} tareas completadas
+                    </p>
+                  </div>
                 </div>
+                <Badge variant="secondary" className="bg-[#e9f5f0] text-[#6fbd9d]">
+                  Equitativo
+                </Badge>
               </div>
-              <Badge variant="secondary" className="bg-[#e9f5f0] text-[#6fbd9d]">
-                Equitativo
-              </Badge>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 
@@ -259,59 +289,50 @@ export function ProgressPanel({ masteryLevel }: ProgressPanelProps) {
         <Card className="p-6 mb-6">
           <h3 className="mb-4">Insignias desbloqueadas</h3>
           <div className="flex gap-4">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-[#fef3e0] flex items-center justify-center">
-                <Trophy className="w-8 h-8 text-[#d4a574]" />
+            {achievements.slice(0, 3).map((achievement) => (
+              <div key={achievement.id} className="flex flex-col items-center gap-2">
+                <div className="w-16 h-16 rounded-full bg-[#fef3e0] flex items-center justify-center">
+                  <Trophy className="w-8 h-8 text-[#d4a574]" />
+                </div>
+                <span className="text-sm text-center">{achievement.title}</span>
               </div>
-              <span className="text-sm text-center">Equipo en acción</span>
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-[#e9f5f0] flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 text-[#6fbd9d]" />
-              </div>
-              <span className="text-sm text-center">Primera semana</span>
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-[#f0ebf5] flex items-center justify-center">
-                <Users className="w-8 h-8 text-[#c8b5d3]" />
-              </div>
-              <span className="text-sm text-center">Colaboradores</span>
-            </div>
+            ))}
+            {achievements.length === 0 && (
+              <p className="text-sm text-muted-foreground">Completa tareas para desbloquear insignias</p>
+            )}
           </div>
         </Card>
       ) : (
         <div className="flex gap-2 mb-6">
-          <Badge className="bg-[#fef3e0] text-[#d4a574]">
-            <Trophy className="w-3 h-3 mr-1" />
-            Equipo en acción
-          </Badge>
-          <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
-            <CheckCircle2 className="w-3 h-3 mr-1" />
-            Primera semana
-          </Badge>
-          <Badge className="bg-[#f0ebf5] text-[#c8b5d3]">
-            <Users className="w-3 h-3 mr-1" />
-            Colaboradores
-          </Badge>
+          {achievements.slice(0, 3).map((achievement) => (
+            <Badge key={achievement.id} className="bg-[#fef3e0] text-[#d4a574]">
+              <Trophy className="w-3 h-3 mr-1" />
+              {achievement.title}
+            </Badge>
+          ))}
         </div>
       )}
 
-      {/* Completed Tasks */}
+      {/* Completed Tasks - simplified for now */}
       <Card className="p-6">
         <h3 className="mb-4">Tareas completadas esta semana</h3>
         <div className="space-y-3">
-          {completedTasks.map((task) => (
-            <div key={task.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+          {metrics && metrics.completed_tasks > 0 ? (
+            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[#6fbd9d]" />
                 <div>
-                  <p>{task.task}</p>
-                  <p className="text-sm text-muted-foreground">{task.member}</p>
+                  <p>{metrics.completed_tasks} tareas completadas</p>
+                  <p className="text-sm text-muted-foreground">Esta semana</p>
                 </div>
               </div>
-              <span className="text-sm text-muted-foreground">{task.day}</span>
+              <span className="text-sm text-muted-foreground">{metrics.total_points_earned || 0} pts</span>
             </div>
-          ))}
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Aún no hay tareas completadas esta semana
+            </p>
+          )}
         </div>
       </Card>
     </div>

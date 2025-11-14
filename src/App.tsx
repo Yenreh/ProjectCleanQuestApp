@@ -21,7 +21,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "./components/ui/dropdown-menu";
-import { db, supabase } from "./lib/db";
+import { db } from "./lib/db";
 import { calculateMasteryLevel, checkLevelUp, getLevelFeatures } from "./lib/masteryService";
 import type { MasteryLevel } from "./lib/masteryService";
 import type { Profile, Home as HomeType, HomeMember } from "./lib/types";
@@ -49,21 +49,19 @@ export default function App() {
     checkAuth();
     
     // Subscribe to auth changes
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) {
-          setIsAuthenticated(true);
-          loadUserData(session.user.id);
-        } else {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          setCurrentHome(null);
-          setCurrentMember(null);
-        }
-      });
-      
-      return () => subscription.unsubscribe();
-    }
+    const subscription = db.onAuthStateChange((userId) => {
+      if (userId) {
+        setIsAuthenticated(true);
+        loadUserData(userId);
+      } else {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setCurrentHome(null);
+        setCurrentMember(null);
+      }
+    });
+    
+    return () => subscription.unsubscribe();
   }, []);
 
   async function checkAuth() {
@@ -84,69 +82,58 @@ export default function App() {
   const loadUserData = async (userId: string) => {
     try {
       // Get user profile
-      const profile = await db.getProfile(userId)
+      const profile = await db.getProfile(userId);
       if (profile) {
-        setCurrentUser(profile)
-      }
-
-      // Get user's homes - check if user belongs to any home
-      if (supabase) {
-        const { data: memberData } = await supabase
-          .from('home_members')
-          .select('*, homes(*)')
-          .eq('user_id', userId)
-          .single()
+        setCurrentUser(profile);
         
-        if (memberData && memberData.homes) {
-          // User has a home
-          const home = memberData.homes as any
-          setCurrentHome(home)
-          setCurrentMember(memberData as HomeMember)
+        // Check onboarding status from profile
+        if (profile.has_completed_onboarding) {
+          setHasCompletedOnboarding(true);
           
-          // Get member achievements count for mastery calculation
-          const { data: achievements } = await supabase
-            .from('member_achievements')
-            .select('id')
-            .eq('member_id', memberData.id)
+          // Load home membership data
+          const { member, home } = await db.getUserHomeMembership(userId);
           
-          // Calculate mastery level in frontend
-          const previousLevel = memberData.mastery_level as MasteryLevel
-          const newLevel = calculateMasteryLevel({
-            totalPoints: memberData.total_points || 0,
-            achievementsUnlocked: achievements?.length || 0,
-            weeksActive: memberData.weeks_active || 0,
-            tasksCompleted: memberData.tasks_completed || 0
-          })
-          
-          setMasteryLevel(newLevel)
-          
-          // Update level in database if changed
-          if (previousLevel !== newLevel) {
-            await supabase
-              .from('home_members')
-              .update({ mastery_level: newLevel })
-              .eq('id', memberData.id)
+          if (member && home) {
+            setCurrentHome(home);
+            setCurrentMember(member);
             
-            // Check if user leveled up (not down)
-            if (checkLevelUp(previousLevel, newLevel)) {
-              const features = getLevelFeatures(newLevel)
-              toast.success(`¡Nivel desbloqueado!`, {
-                description: `Has alcanzado nuevas capacidades. Características desbloqueadas:\n${features.slice(0, 2).join('\n')}`
-              })
+            // Get member achievements count for mastery calculation
+            const achievementsCount = await db.getMemberAchievementsCount(member.id);
+            
+            // Calculate mastery level
+            const previousLevel = member.mastery_level as MasteryLevel;
+            const newLevel = calculateMasteryLevel({
+              totalPoints: member.total_points || 0,
+              achievementsUnlocked: achievementsCount,
+              weeksActive: member.weeks_active || 0,
+              tasksCompleted: member.tasks_completed || 0
+            });
+            
+            setMasteryLevel(newLevel);
+            
+            // Update level in database if changed
+            if (previousLevel !== newLevel) {
+              await db.updateMemberMasteryLevel(member.id, newLevel);
+              
+              // Check if user leveled up (not down)
+              if (checkLevelUp(previousLevel, newLevel)) {
+                const features = getLevelFeatures(newLevel);
+                toast.success(`¡Nivel desbloqueado!`, {
+                  description: `Has alcanzado nuevas capacidades. Características desbloqueadas:\n${features.slice(0, 2).join('\n')}`
+                });
+              }
             }
           }
-          
-          setHasCompletedOnboarding(true)
         } else {
-          // User needs to create a home (onboarding)
-          setHasCompletedOnboarding(false)
+          // User needs to complete onboarding
+          setHasCompletedOnboarding(false);
         }
       }
 
-      setIsLoading(false)
+      setIsLoading(false);
     } catch (error) {
-      console.error('Error loading user data:', error)
-      setIsLoading(false)
+      console.error('Error loading user data:', error);
+      setIsLoading(false);
     }
   }
 
@@ -166,10 +153,10 @@ export default function App() {
   }
 
   async function handleOnboardingComplete() {
-    setHasCompletedOnboarding(true);
-    // Reload user data to get the new home
+    // Reload user data so we read the newly created home/tasks from backend
     if (currentUser) {
       await loadUserData(currentUser.id);
+      // `loadUserData` will set `hasCompletedOnboarding` based on DB state
     }
   }
 
@@ -208,15 +195,15 @@ export default function App() {
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
-        return <HomeScreen masteryLevel={masteryLevel} />;
+        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "progress":
-        return <ProgressPanel masteryLevel={masteryLevel} />;
+        return <ProgressPanel masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "challenges":
-        return <ChallengesView masteryLevel={masteryLevel} />;
+        return <ChallengesView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "harmony":
-        return <HarmonyRoom masteryLevel={masteryLevel} />;
+        return <HarmonyRoom masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       default:
-        return <HomeScreen masteryLevel={masteryLevel} />;
+        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
     }
   };
 

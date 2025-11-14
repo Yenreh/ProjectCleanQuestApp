@@ -31,6 +31,7 @@ export interface Profile {
   email: string
   full_name?: string
   avatar_url?: string
+  has_completed_onboarding: boolean
   created_at: string
   updated_at: string
 }
@@ -191,6 +192,39 @@ export interface SpecialTemplate {
   created_at: string
 }
 
+export interface TaskTemplate {
+  id: number
+  name: string
+  title: string
+  description?: string
+  icon?: string
+  zone?: string
+  frequency: TaskFrequency
+  effort_points: number
+  is_public: boolean
+  created_by?: string
+  created_at: string
+}
+
+export interface TaskStep {
+  id: number
+  task_id: number
+  step_order: number
+  title: string
+  description?: string
+  is_optional: boolean
+  estimated_minutes?: number
+  created_at: string
+}
+
+export interface TaskStepCompletion {
+  id: number
+  step_id: number
+  assignment_id: number
+  completed_by: number
+  completed_at: string
+}
+
 export interface ChangeLog {
   id: number
   home_id: number
@@ -220,6 +254,9 @@ export interface TaskExchangeRequest {
 export interface TaskWithDetails extends Task {
   zone_name?: string
   zone_icon?: string
+  steps?: TaskStep[]
+  total_steps?: number
+  completed_steps?: number
 }
 
 export interface AssignmentWithDetails extends TaskAssignment {
@@ -228,6 +265,10 @@ export interface AssignmentWithDetails extends TaskAssignment {
   task_effort: number
   member_name?: string
   member_email: string
+  task_zone_name?: string
+  task_zone_icon?: string
+  task_steps?: TaskStep[]
+  completed_steps_count?: number
 }
 
 export interface ChallengeWithParticipants extends Challenge {
@@ -309,3 +350,7 @@ export type InviteMemberInput = {
 export type CreateChallengeInput = Omit<Challenge, 'id' | 'created_at' | 'created_by' | 'home_id'>
 
 export type CreateProposalInput = Omit<ImprovementProposal, 'id' | 'created_at' | 'updated_at' | 'proposed_by' | 'home_id' | 'votes_yes' | 'votes_no'>
+
+export type CreateTaskTemplateInput = Omit<TaskTemplate, 'id' | 'created_at' | 'created_by' | 'is_public'>
+
+export type CreateTaskStepInput = Omit<TaskStep, 'id' | 'created_at' | 'task_id'>

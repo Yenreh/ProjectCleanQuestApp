@@ -1,46 +1,98 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
-import { CheckCircle2, Trash2, UtensilsCrossed, Sparkles, Circle, Lightbulb, AlertCircle, Calculator, ChevronDown, ChevronUp, GripVertical, TrendingUp, Heart } from "lucide-react";
+import { CheckCircle2, Trash2, UtensilsCrossed, Sparkles, Circle, Lightbulb, AlertCircle, Calculator, ChevronDown, ChevronUp, GripVertical, TrendingUp, Heart, Loader2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-
-interface Task {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-  completed: boolean;
-  day?: string;
-  effort?: number;
-  assignee?: string;
-}
+import { db } from "../lib/db";
+import { toast } from "sonner";
+import type { AssignmentWithDetails, HomeMember, HomeMetrics } from "../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
 interface HomeScreenProps {
   masteryLevel: MasteryLevel;
+  currentMember?: HomeMember | null;
+  homeId?: number | null;
 }
 
-export function HomeScreen({ masteryLevel }: HomeScreenProps) {
-  const userName = "Ana";
-  const completionPercentage = 78;
-  const rotationPercentage = 28;
+export function HomeScreen({ masteryLevel, currentMember, homeId }: HomeScreenProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
+  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [showCalculation, setShowCalculation] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<number | null>(null);
   
-  const tasks: Task[] = [
-    { id: "1", title: "Sacar la basura", icon: <Trash2 className="w-5 h-5" />, completed: false, day: "Lun", effort: 1, assignee: "Ana" },
-    { id: "2", title: "Lavar los platos", icon: <UtensilsCrossed className="w-5 h-5" />, completed: true, day: "Mar", effort: 3, assignee: "Carlos" },
-    { id: "3", title: "Barrer la cocina", icon: <Sparkles className="w-5 h-5" />, completed: false, day: "Mié", effort: 3, assignee: "Ana" },
-  ];
+  const userName = currentMember?.email?.split('@')[0] || "Usuario";
 
-  const completedCount = tasks.filter(t => t.completed).length;
+  // Load tasks and metrics
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId]);
+
+  const loadData = async () => {
+    if (!currentMember || !homeId) return;
+    
+    setIsLoading(true);
+    try {
+      const [myAssignments, homeMetrics] = await Promise.all([
+        db.getMyAssignments(currentMember.id, 'pending'),
+        db.getHomeMetrics(homeId)
+      ]);
+      
+      setAssignments(myAssignments);
+      setMetrics(homeMetrics);
+    } catch (error) {
+      console.error('Error loading home data:', error);
+      toast.error('Error al cargar tareas');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteTask = async (assignmentId: number) => {
+    if (!currentMember) return;
+    
+    try {
+      await db.completeTask(assignmentId, currentMember.id);
+      toast.success('¡Tarea completada!');
+      await loadData(); // Reload data
+    } catch (error) {
+      console.error('Error completing task:', error);
+      toast.error('Error al completar tarea');
+    }
+  };
+
+  const completionPercentage = metrics?.completion_percentage || 0;
+  const rotationPercentage = metrics?.rotation_percentage || 0;
+  const completedCount = assignments.filter(a => a.status === 'completed').length;
 
   // Simulate what-if for expert level
   const whatIfCompletion = selectedTask ? 85 : completionPercentage;
   const whatIfRotation = selectedTask ? 22 : rotationPercentage;
+
+  // Helper to get icon for task
+  const getTaskIcon = (iconName?: string) => {
+    switch (iconName) {
+      case 'trash': return <Trash2 className="w-5 h-5" />;
+      case 'utensils': return <UtensilsCrossed className="w-5 h-5" />;
+      case 'sparkles': return <Sparkles className="w-5 h-5" />;
+      default: return <CheckCircle2 className="w-5 h-5" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-[#6fbd9d] animate-spin mb-4" />
+        <p className="text-muted-foreground">Cargando tareas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center px-6 py-8 max-w-md mx-auto h-full">
@@ -230,38 +282,55 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
             {masteryLevel !== "novice" && "Tareas pendientes"}
           </h3>
           {masteryLevel === "novice" && (
-            <span className="text-sm text-muted-foreground">{completedCount}/{tasks.length}</span>
+            <span className="text-sm text-muted-foreground">{completedCount}/{assignments.length}</span>
           )}
         </div>
         <div className="space-y-3">
-          {tasks.map((task) => (
+          {assignments.map((assignment) => (
             <Card 
-              key={task.id} 
+              key={assignment.id} 
               className={`p-4 ${(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") ? "cursor-move" : ""} ${
-                selectedTask === task.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""
+                selectedTask === assignment.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""
               }`}
               draggable={masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary"}
-              onDragStart={() => (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && setSelectedTask(task.id)}
+              onDragStart={() => (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && setSelectedTask(assignment.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                     <GripVertical className="w-4 h-4 text-muted-foreground" />
                   )}
-                  <div className={`p-2 rounded-lg ${task.completed ? 'bg-[#e9f5f0] text-[#6fbd9d]' : 'bg-[#f5f3ed] text-[#d4a574]'}`}>
-                    {task.icon}
+                  <div className={`p-2 rounded-lg ${assignment.status === 'completed' ? 'bg-[#e9f5f0] text-[#6fbd9d]' : 'bg-[#f5f3ed] text-[#d4a574]'}`}>
+                    {getTaskIcon(assignment.task_icon)}
                   </div>
                   <div className="flex-1">
-                    <span className={task.completed ? 'text-muted-foreground line-through' : ''}>
-                      {task.title}
-                    </span>
-                    {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && task.day && (
+                    <div className="flex items-center gap-2">
+                      <span className={assignment.status === 'completed' ? 'text-muted-foreground line-through' : ''}>
+                        {assignment.task_title}
+                      </span>
+                      {assignment.task_zone_name && (
+                        <Badge variant="outline" className="text-xs">
+                          {assignment.task_zone_name}
+                        </Badge>
+                      )}
+                    </div>
+                    {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">{task.day}</span>
-                        {task.effort && (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(assignment.assigned_date).toLocaleDateString('es-ES', { weekday: 'short' })}
+                        </span>
+                        {assignment.task_effort && (
                           <>
                             <span className="text-xs text-muted-foreground">•</span>
-                            <span className="text-xs text-muted-foreground">Esfuerzo: {task.effort}</span>
+                            <span className="text-xs text-muted-foreground">Esfuerzo: {assignment.task_effort}</span>
+                          </>
+                        )}
+                        {assignment.task_steps && assignment.task_steps.length > 0 && (
+                          <>
+                            <span className="text-xs text-muted-foreground">•</span>
+                            <span className="text-xs text-muted-foreground">
+                              {assignment.completed_steps_count || 0}/{assignment.task_steps.length} pasos
+                            </span>
                           </>
                         )}
                       </div>
@@ -269,16 +338,25 @@ export function HomeScreen({ masteryLevel }: HomeScreenProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {task.completed && (
+                  {assignment.status === 'completed' ? (
                     <CheckCircle2 className="w-5 h-5 text-[#6fbd9d]" />
-                  )}
-                  {!task.completed && masteryLevel === "novice" && (
-                    <Circle className="w-5 h-5 text-[#d4a574]" />
-                  )}
-                  {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && task.assignee && (
-                    <Button variant="ghost" size="sm" className="h-6 px-2">
-                      <Heart className="w-3 h-3" />
-                    </Button>
+                  ) : (
+                    <>
+                      {masteryLevel === "novice" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCompleteTask(assignment.id)}
+                        >
+                          <Circle className="w-5 h-5 text-[#d4a574]" />
+                        </Button>
+                      )}
+                      {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
+                        <Button variant="ghost" size="sm" className="h-6 px-2">
+                          <Heart className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

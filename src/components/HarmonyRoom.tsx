@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -6,67 +6,59 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Switch } from "./ui/switch";
-import { Trophy, Users, Home, Sparkles, CheckCircle2, BarChart3, Calendar, FileText, Settings, Target, Clock } from "lucide-react";
+import { Trophy, Users, Home, Sparkles, CheckCircle2, BarChart3, Calendar, FileText, Settings, Target, Clock, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-
-interface Room {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  status: "clean" | "excellent";
-}
-
-interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  color: string;
-}
+import { db } from "../lib/db";
+import { toast } from "sonner";
+import type { Zone, Achievement, HomeMember, HomeMetrics } from "../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
 interface HarmonyRoomProps {
   masteryLevel: MasteryLevel;
+  currentMember?: HomeMember | null;
+  homeId?: number | null;
 }
 
-export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
-  const consecutiveWeeks = 4;
-  const completionRate = 92;
+export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoomProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [goalPercentage, setGoalPercentage] = useState("80");
   const [rotationPolicy, setRotationPolicy] = useState("weekly");
   const [autoRotation, setAutoRotation] = useState(true);
 
-  const rooms: Room[] = [
-    { id: "1", name: "Cocina", icon: <Sparkles className="w-6 h-6" />, status: "excellent" },
-    { id: "2", name: "Baño", icon: <Sparkles className="w-6 h-6" />, status: "excellent" },
-    { id: "3", name: "Sala", icon: <Home className="w-6 h-6" />, status: "clean" },
-    { id: "4", name: "Habitaciones", icon: <CheckCircle2 className="w-6 h-6" />, status: "clean" },
-  ];
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId]);
 
-  const achievements: Achievement[] = [
-    {
-      id: "1",
-      title: "Círculo de Equidad",
-      description: "Todos los miembros han contribuido equitativamente",
-      icon: <Users className="w-8 h-8" />,
-      color: "bg-[#e9f5f0] text-[#6fbd9d]",
-    },
-    {
-      id: "2",
-      title: "Hogar en Armonía",
-      description: "4 semanas consecutivas con +80% de cumplimiento",
-      icon: <Trophy className="w-8 h-8" />,
-      color: "bg-[#fef3e0] text-[#d4a574]",
-    },
-    {
-      id: "3",
-      title: "Maestros de la Convivencia",
-      description: "Excelencia en colaboración y organización",
-      icon: <Sparkles className="w-8 h-8" />,
-      color: "bg-[#f0ebf5] text-[#c8b5d3]",
-    },
-  ];
+  const loadData = async () => {
+    if (!homeId || !currentMember) return;
+    
+    setIsLoading(true);
+    try {
+      const [homeZones, memberAchievements, homeMetrics] = await Promise.all([
+        db.getZones(homeId),
+        db.getMemberAchievements(currentMember.id),
+        db.getHomeMetrics(homeId)
+      ]);
+      
+      setZones(homeZones);
+      setAchievements(memberAchievements);
+      setMetrics(homeMetrics);
+    } catch (error) {
+      console.error('Error loading harmony room data:', error);
+      toast.error('Error al cargar datos');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const consecutiveWeeks = metrics?.consecutive_weeks || 0;
+  const completionRate = metrics?.completion_percentage || 0;
 
   const templates = [
     { id: 1, name: "Semana de exámenes", description: "Reduce tareas en 50%", active: false },
@@ -77,6 +69,24 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
     { date: "2 Nov 2025", change: "Meta grupal actualizada a 80%", author: "Ana" },
     { date: "28 Oct 2025", change: "Rotación cambiada a semanal", author: "Carlos" },
   ];
+
+  const getZoneIcon = (iconName?: string) => {
+    switch (iconName) {
+      case 'sparkles': return <Sparkles className="w-6 h-6" />;
+      case 'home': return <Home className="w-6 h-6" />;
+      case 'utensils': return <Sparkles className="w-6 h-6" />;
+      default: return <CheckCircle2 className="w-6 h-6" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-[#6fbd9d] animate-spin mb-4" />
+        <p className="text-muted-foreground">Cargando sala de armonía...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 py-8 max-w-3xl mx-auto">
@@ -273,26 +283,34 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
       <Card className="p-6 mb-6">
         <h3 className="mb-4 text-center">Estado del hogar</h3>
         <div className="grid grid-cols-2 gap-4">
-          {rooms.map((room) => (
-            <div 
-              key={room.id} 
-              className={`p-4 rounded-lg text-center transition-all ${
-                room.status === "excellent" 
-                  ? "bg-gradient-to-br from-[#e9f5f0] to-[#d0ebe0] border-2 border-[#6fbd9d]/30" 
-                  : "bg-muted/30"
-              }`}
-            >
-              <div className={`inline-flex p-3 rounded-full mb-2 ${
-                room.status === "excellent" ? "bg-[#6fbd9d]/20 text-[#6fbd9d]" : "bg-muted text-muted-foreground"
-              }`}>
-                {room.icon}
+          {zones.map((zone) => {
+            const status = completionRate >= 90 ? 'excellent' : 'clean';
+            return (
+              <div 
+                key={zone.id} 
+                className={`p-4 rounded-lg text-center transition-all ${
+                  status === "excellent" 
+                    ? "bg-gradient-to-br from-[#e9f5f0] to-[#d0ebe0] border-2 border-[#6fbd9d]/30" 
+                    : "bg-muted/30"
+                }`}
+              >
+                <div className={`inline-flex p-3 rounded-full mb-2 ${
+                  status === "excellent" ? "bg-[#6fbd9d]/20 text-[#6fbd9d]" : "bg-muted text-muted-foreground"
+                }`}>
+                  {getZoneIcon(zone.icon)}
+                </div>
+                <p>{zone.name}</p>
+                {status === "excellent" && (
+                  <Badge className="mt-2 bg-[#6fbd9d] hover:bg-[#5fa989]">Excelente</Badge>
+                )}
               </div>
-              <p>{room.name}</p>
-              {room.status === "excellent" && (
-                <Badge className="mt-2 bg-[#6fbd9d] hover:bg-[#5fa989]">Excelente</Badge>
-              )}
-            </div>
-          ))}
+            );
+          })}
+          {zones.length === 0 && (
+            <p className="col-span-2 text-center text-sm text-muted-foreground py-8">
+              No hay zonas configuradas
+            </p>
+          )}
         </div>
       </Card>
 
@@ -305,6 +323,9 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
               {achievement.title}
             </Badge>
           ))}
+          {achievements.length === 0 && (
+            <p className="text-sm text-muted-foreground">Sin insignias desbloqueadas</p>
+          )}
         </div>
       ) : (
         <Card className="p-6 mb-6">
@@ -312,8 +333,8 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
           <div className="space-y-4">
             {achievements.map((achievement) => (
               <div key={achievement.id} className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
-                <div className={`p-3 rounded-full ${achievement.color}`}>
-                  {achievement.icon}
+                <div className="p-3 rounded-full bg-[#e9f5f0] text-[#6fbd9d]">
+                  <Trophy className="w-8 h-8" />
                 </div>
                 <div className="flex-1">
                   <h4 className="mb-1">{achievement.title}</h4>
@@ -322,6 +343,11 @@ export function HarmonyRoom({ masteryLevel }: HarmonyRoomProps) {
                 <CheckCircle2 className="w-6 h-6 text-[#6fbd9d] flex-shrink-0" />
               </div>
             ))}
+            {achievements.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Completa tareas para desbloquear insignias maestras
+              </p>
+            )}
           </div>
         </Card>
       )}

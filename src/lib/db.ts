@@ -18,6 +18,9 @@ import type {
   CreateTaskInput,
   CreateZoneInput,
   InviteMemberInput,
+  CreateTaskTemplateInput,
+  CreateTaskStepInput,
+  TaskStep,
   AssignmentWithDetails,
   ChallengeWithParticipants,
   ProposalWithAuthor
@@ -83,6 +86,18 @@ export const db = {
     if (error) throw error
   },
 
+  onAuthStateChange(callback: (userId: string | null) => void) {
+    if (!supabase) {
+      return { unsubscribe: () => {} };
+    }
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      callback(session?.user?.id || null);
+    });
+    
+    return subscription;
+  },
+
   async getCurrentUser() {
     if (!supabase) return null
     const { data: { user } } = await supabase.auth.getUser()
@@ -116,6 +131,17 @@ export const db = {
     return data
   },
 
+  async markOnboardingComplete(userId: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ has_completed_onboarding: true })
+      .eq('id', userId)
+    
+    if (error) throw error
+  },
+
   // ========== HOMES ==========
 
   async createHome(userId: string, homeData: CreateHomeInput): Promise<Home> {
@@ -132,11 +158,17 @@ export const db = {
     
     if (error) throw error
     
+    // Get user profile first
+    const profile = await this.getProfile(userId)
+    if (!profile || !profile.email) {
+      throw new Error('User profile or email not found')
+    }
+    
     // Create owner as member
-    await supabase.from('home_members').insert({
+    const { error: memberError } = await supabase.from('home_members').insert({
       home_id: data.id,
       user_id: userId,
-      email: (await this.getProfile(userId))!.email,
+      email: profile.email,
       role: 'owner',
       status: 'active',
       mastery_level: 'novice',
@@ -144,6 +176,8 @@ export const db = {
       tasks_completed: 0,
       current_streak: 0
     })
+    
+    if (memberError) throw memberError
     
     return data
   },
@@ -329,6 +363,45 @@ export const db = {
     return data
   },
 
+  async getTasksWithDetails(homeId: number, activeOnly = true) {
+    if (!supabase) return []
+
+    let query = supabase
+      .from('tasks')
+      .select(`
+        *,
+        zones (
+          name,
+          icon
+        )
+      `)
+      .eq('home_id', homeId)
+
+    if (activeOnly) {
+      query = query.eq('is_active', true)
+    }
+
+    const { data: tasks, error } = await query.order('created_at', { ascending: true })
+    if (error) throw error
+    if (!tasks) return []
+
+    // Enrich each task with its steps
+    const tasksWithDetails = await Promise.all(
+      tasks.map(async (task) => {
+        const steps = await this.getTaskSteps(task.id)
+        return {
+          ...task,
+          zone_name: (task.zones as any)?.name,
+          zone_icon: (task.zones as any)?.icon,
+          steps,
+          total_steps: steps.length
+        }
+      })
+    )
+
+    return tasksWithDetails
+  },
+
   async updateTask(taskId: number, updates: Partial<Task>) {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -339,6 +412,119 @@ export const db = {
       .select()
       .single()
     
+    if (error) throw error
+    return data
+  },
+
+  // ========== TASK TEMPLATES ==========
+
+  async createTaskTemplate(templateData: CreateTaskTemplateInput) {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const user = await this.getCurrentUser()
+
+    const { data, error } = await supabase
+      .from('task_templates')
+      .insert({
+        ...templateData,
+        created_by: user?.id
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async getTaskTemplates(publicOnly = true) {
+    if (!supabase) return []
+
+    let query = supabase.from('task_templates').select('*')
+    if (publicOnly) query = query.eq('is_public', true)
+
+    const { data, error } = await query.order('created_at', { ascending: true })
+    if (error) throw error
+    return data
+  },
+
+  async createSpecialTemplate(homeId: number, templateData: any) {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const user = await this.getCurrentUser()
+
+    const { data, error } = await supabase
+      .from('special_templates')
+      .insert({
+        home_id: homeId,
+        name: templateData.name || 'Personalizada',
+        description: templateData.description || null,
+        modifications: templateData.modifications || {},
+        is_active: templateData.is_active || false,
+        created_by: user?.id
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  // ========== TASK STEPS (Subtareas) ==========
+
+  async createTaskStep(taskId: number, stepData: CreateTaskStepInput) {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('task_steps')
+      .insert({
+        ...stepData,
+        task_id: taskId
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async getTaskSteps(taskId: number): Promise<TaskStep[]> {
+    if (!supabase) return []
+
+    const { data, error } = await supabase
+      .from('task_steps')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('step_order', { ascending: true })
+
+    if (error) throw error
+    return data
+  },
+
+  async completeTaskStep(stepId: number, assignmentId: number, memberId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('task_step_completions')
+      .insert({
+        step_id: stepId,
+        assignment_id: assignmentId,
+        completed_by: memberId
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async getStepCompletions(assignmentId: number) {
+    if (!supabase) return []
+
+    const { data, error } = await supabase
+      .from('task_step_completions')
+      .select('*')
+      .eq('assignment_id', assignmentId)
+
     if (error) throw error
     return data
   },
@@ -355,7 +541,11 @@ export const db = {
         tasks (
           title,
           icon,
-          effort_points
+          effort_points,
+          zones (
+            name,
+            icon
+          )
         ),
         home_members (
           email,
@@ -374,15 +564,31 @@ export const db = {
     const { data, error } = await query.order('assigned_date', { ascending: false })
     
     if (error) throw error
+    if (!data) return []
     
-    return data.map(item => ({
-      ...item,
-      task_title: (item.tasks as any).title,
-      task_icon: (item.tasks as any).icon,
-      task_effort: (item.tasks as any).effort_points,
-      member_email: (item.home_members as any).email,
-      member_name: (item.home_members as any).profiles?.full_name
-    }))
+    // Enrich with steps info
+    const enriched = await Promise.all(
+      data.map(async (item) => {
+        const taskId = (item.tasks as any).id || item.task_id
+        const steps = await this.getTaskSteps(taskId)
+        const completions = await this.getStepCompletions(item.id)
+        
+        return {
+          ...item,
+          task_title: (item.tasks as any).title,
+          task_icon: (item.tasks as any).icon,
+          task_effort: (item.tasks as any).effort_points,
+          task_zone_name: (item.tasks as any).zones?.name,
+          task_zone_icon: (item.tasks as any).zones?.icon,
+          member_email: (item.home_members as any).email,
+          member_name: (item.home_members as any).profiles?.full_name,
+          task_steps: steps,
+          completed_steps_count: completions.length
+        }
+      })
+    )
+    
+    return enriched
   },
 
   async completeTask(assignmentId: number, memberId: number, notes?: string, evidenceUrl?: string) {
@@ -954,6 +1160,152 @@ export const db = {
       tasks_pending: pending,
       points_earned: member?.total_points || 0,
       completion_rate: total > 0 ? Math.round((completed / total) * 100) : 0
+    }
+  },
+
+  // ========== ZONE PRESETS ==========
+  
+  async getZonePresets(): Promise<string[]> {
+    if (!supabase) {
+      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('zone_presets')
+        .select('name')
+        .order('display_order');
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        return data.map((z: any) => z.name);
+      }
+      
+      // Fallback to hardcoded zones
+      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+    } catch (error) {
+      console.error('Error loading zone presets:', error);
+      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+    }
+  },
+
+  // ========== TASK TEMPLATES WITH STEPS ==========
+  
+  async getTaskTemplatesWithSteps(publicOnly = true) {
+    if (!supabase) return [];
+
+    try {
+      let query = supabase
+        .from('task_templates')
+        .select(`
+          id,
+          name,
+          title,
+          icon,
+          zone,
+          frequency,
+          effort_points,
+          task_template_steps (
+            step_order,
+            title,
+            is_optional
+          )
+        `)
+        .order('id');
+
+      if (publicOnly) {
+        query = query.eq('is_public', true);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      return (data || []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        title: t.title,
+        icon: t.icon,
+        zone: t.zone,
+        frequency: t.frequency,
+        effort_points: t.effort_points,
+        steps: (t.task_template_steps || []).sort((a: any, b: any) => a.step_order - b.step_order)
+      }));
+    } catch (error) {
+      console.error('Error loading task templates with steps:', error);
+      return [];
+    }
+  },
+
+  // ========== USER HOME MEMBERSHIP ==========
+  
+  async getUserHomeMembership(userId: string): Promise<{ member: HomeMember | null; home: Home | null }> {
+    if (!supabase) {
+      return { member: null, home: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('home_members')
+        .select('*, homes(*)')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      if (data && data.homes) {
+        return {
+          member: data as HomeMember,
+          home: data.homes as any as Home
+        };
+      }
+      
+      return { member: null, home: null };
+    } catch (error) {
+      console.error('Error loading user home membership:', error);
+      return { member: null, home: null };
+    }
+  },
+
+  // ========== MEMBER ACHIEVEMENTS COUNT ==========
+  
+  async getMemberAchievementsCount(memberId: number): Promise<number> {
+    if (!supabase) return 0;
+
+    try {
+      const { data, error } = await supabase
+        .from('member_achievements')
+        .select('id')
+        .eq('member_id', memberId);
+      
+      if (error) throw error;
+      
+      return data?.length || 0;
+    } catch (error) {
+      console.error('Error counting member achievements:', error);
+      return 0;
+    }
+  },
+
+  // ========== UPDATE MEMBER MASTERY LEVEL ==========
+  
+  async updateMemberMasteryLevel(memberId: number, masteryLevel: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      const { error } = await supabase
+        .from('home_members')
+        .update({ mastery_level: masteryLevel })
+        .eq('id', memberId);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating mastery level:', error);
+      throw error;
     }
   }
 }
