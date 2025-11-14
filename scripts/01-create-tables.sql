@@ -185,6 +185,57 @@ CREATE TABLE IF NOT EXISTS special_templates (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabla de plantillas de tareas (catálogo global)
+CREATE TABLE IF NOT EXISTS task_templates (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  icon TEXT DEFAULT 'check-circle',
+  zone TEXT,
+  frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('daily', 'weekly', 'biweekly', 'monthly')),
+  effort_points INTEGER NOT NULL DEFAULT 1 CHECK (effort_points >= 1 AND effort_points <= 10),
+  is_public BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabla de pasos de plantillas de tareas (catálogo global)
+CREATE TABLE IF NOT EXISTS task_template_steps (
+  id SERIAL PRIMARY KEY,
+  template_id INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  is_optional BOOLEAN NOT NULL DEFAULT FALSE,
+  estimated_minutes INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(template_id, step_order)
+);
+
+-- Tabla de pasos/subtareas para tareas (progresión)
+CREATE TABLE IF NOT EXISTS task_steps (
+  id SERIAL PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  is_optional BOOLEAN NOT NULL DEFAULT FALSE,
+  estimated_minutes INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(task_id, step_order)
+);
+
+-- Tabla de completitud de pasos
+CREATE TABLE IF NOT EXISTS task_step_completions (
+  id SERIAL PRIMARY KEY,
+  step_id INTEGER NOT NULL REFERENCES task_steps(id) ON DELETE CASCADE,
+  assignment_id INTEGER NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
+  completed_by INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(step_id, assignment_id)
+);
+
 -- Tabla de historial de cambios (audit log)
 CREATE TABLE IF NOT EXISTS change_log (
   id SERIAL PRIMARY KEY,
@@ -227,6 +278,11 @@ CREATE INDEX IF NOT EXISTS idx_challenge_participants_challenge ON challenge_par
 CREATE INDEX IF NOT EXISTS idx_member_achievements_member ON member_achievements(member_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_home ON improvement_proposals(home_id);
 CREATE INDEX IF NOT EXISTS idx_change_log_home ON change_log(home_id);
+CREATE INDEX IF NOT EXISTS idx_task_templates_name ON task_templates(name);
+CREATE INDEX IF NOT EXISTS idx_task_template_steps_template ON task_template_steps(template_id);
+CREATE INDEX IF NOT EXISTS idx_task_steps_task ON task_steps(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_step_completions_step ON task_step_completions(step_id);
+CREATE INDEX IF NOT EXISTS idx_task_step_completions_assignment ON task_step_completions(assignment_id);
 
 -- Función para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -238,15 +294,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers para updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_homes_updated_at ON homes;
 CREATE TRIGGER update_homes_updated_at BEFORE UPDATE ON homes
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_proposals_updated_at ON improvement_proposals;
 CREATE TRIGGER update_proposals_updated_at BEFORE UPDATE ON improvement_proposals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -266,17 +326,24 @@ ALTER TABLE proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE special_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE change_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_exchange_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_template_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_step_completions ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS básicas (los usuarios pueden ver y modificar datos de sus hogares)
 
 -- Profiles: los usuarios pueden ver y actualizar su propio perfil
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
 -- Homes: los miembros pueden ver los hogares a los que pertenecen
+DROP POLICY IF EXISTS "Members can view their homes" ON homes;
 CREATE POLICY "Members can view their homes" ON homes
   FOR SELECT USING (
     id IN (
@@ -285,13 +352,16 @@ CREATE POLICY "Members can view their homes" ON homes
     )
   );
 
+DROP POLICY IF EXISTS "Owners can update their homes" ON homes;
 CREATE POLICY "Owners can update their homes" ON homes
   FOR UPDATE USING (created_by = auth.uid());
 
+DROP POLICY IF EXISTS "Users can create homes" ON homes;
 CREATE POLICY "Users can create homes" ON homes
   FOR INSERT WITH CHECK (created_by = auth.uid());
 
 -- Home members: los miembros pueden ver otros miembros del mismo hogar
+DROP POLICY IF EXISTS "Members can view home members" ON home_members;
 CREATE POLICY "Members can view home members" ON home_members
   FOR SELECT USING (
     home_id IN (
@@ -301,6 +371,7 @@ CREATE POLICY "Members can view home members" ON home_members
   );
 
 -- Tasks: los miembros pueden ver tareas de su hogar
+DROP POLICY IF EXISTS "Members can view home tasks" ON tasks;
 CREATE POLICY "Members can view home tasks" ON tasks
   FOR SELECT USING (
     home_id IN (
@@ -310,6 +381,7 @@ CREATE POLICY "Members can view home tasks" ON tasks
   );
 
 -- Task assignments: los miembros pueden ver asignaciones de su hogar
+DROP POLICY IF EXISTS "Members can view task assignments" ON task_assignments;
 CREATE POLICY "Members can view task assignments" ON task_assignments
   FOR SELECT USING (
     member_id IN (
@@ -319,6 +391,7 @@ CREATE POLICY "Members can view task assignments" ON task_assignments
   );
 
 -- Completions: los miembros pueden ver y crear completitudes
+DROP POLICY IF EXISTS "Members can view completions" ON task_completions;
 CREATE POLICY "Members can view completions" ON task_completions
   FOR SELECT USING (
     member_id IN (
@@ -327,6 +400,7 @@ CREATE POLICY "Members can view completions" ON task_completions
     )
   );
 
+DROP POLICY IF EXISTS "Members can create completions" ON task_completions;
 CREATE POLICY "Members can create completions" ON task_completions
   FOR INSERT WITH CHECK (
     member_id IN (
