@@ -263,6 +263,15 @@ CREATE TABLE IF NOT EXISTS task_exchange_requests (
   responded_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Tabla de tareas favoritas por miembro
+CREATE TABLE IF NOT EXISTS task_favorites (
+  id SERIAL PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  member_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(task_id, member_id)
+);
+
 -- Índices para optimizar consultas
 CREATE INDEX IF NOT EXISTS idx_homes_created_by ON homes(created_by);
 CREATE INDEX IF NOT EXISTS idx_zones_home ON zones(home_id);
@@ -284,6 +293,8 @@ CREATE INDEX IF NOT EXISTS idx_task_template_steps_template ON task_template_ste
 CREATE INDEX IF NOT EXISTS idx_task_steps_task ON task_steps(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_step_completions_step ON task_step_completions(step_id);
 CREATE INDEX IF NOT EXISTS idx_task_step_completions_assignment ON task_step_completions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_task_favorites_member ON task_favorites(member_id);
+CREATE INDEX IF NOT EXISTS idx_task_favorites_task ON task_favorites(task_id);
 
 -- Función para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -334,6 +345,7 @@ ALTER TABLE proposal_votes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE special_templates DISABLE ROW LEVEL SECURITY;
 ALTER TABLE change_log DISABLE ROW LEVEL SECURITY;
 ALTER TABLE task_exchange_requests DISABLE ROW LEVEL SECURITY;
+ALTER TABLE task_favorites DISABLE ROW LEVEL SECURITY;
 
 -- ========== POLÍTICAS RLS SIMPLIFICADAS ==========
 -- Solo políticas básicas para autenticación y datos públicos

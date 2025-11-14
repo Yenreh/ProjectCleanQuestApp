@@ -18,34 +18,38 @@ DROP TABLE IF EXISTS challenges CASCADE;
 DROP TABLE IF EXISTS member_achievements CASCADE;
 DROP TABLE IF EXISTS achievements CASCADE;
 
--- 4. Tablas de intercambio de tareas
+-- 4. Tablas de favoritos
+DROP TABLE IF EXISTS task_favorites CASCADE;
+
+-- 5. Tablas de intercambio de tareas
 DROP TABLE IF EXISTS task_exchange_requests CASCADE;
 
--- 5. Tablas de completaciones
+-- 6. Tablas de completaciones
 DROP TABLE IF EXISTS task_step_completions CASCADE;
 DROP TABLE IF EXISTS task_completions CASCADE;
 
--- 6. Tablas de asignaciones
+-- 7. Tablas de asignaciones
 DROP TABLE IF EXISTS task_assignments CASCADE;
 
--- 7. Tablas de pasos de tareas
+-- 8. Tablas de pasos de tareas
 DROP TABLE IF EXISTS task_steps CASCADE;
 DROP TABLE IF EXISTS task_template_steps CASCADE;
 
--- 8. Tablas de tareas y templates
+-- 9. Tablas de tareas y templates
+DROP TABLE IF EXISTS special_templates CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS task_templates CASCADE;
 
--- 9. Tabla de zonas predefinidas
+-- 10. Tabla de zonas predefinidas
 DROP TABLE IF EXISTS zone_presets CASCADE;
 
--- 10. Tablas de zonas del hogar
+-- 11. Tablas de zonas del hogar
 DROP TABLE IF EXISTS zones CASCADE;
 
--- 11. Tablas de miembros
+-- 12. Tablas de miembros
 DROP TABLE IF EXISTS home_members CASCADE;
 
--- 12. Tablas de hogares
+-- 13. Tablas de hogares
 DROP TABLE IF EXISTS homes CASCADE;
 
 -- 13. Perfiles - COMENTADO para no eliminar

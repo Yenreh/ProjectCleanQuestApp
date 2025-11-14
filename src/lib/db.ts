@@ -1327,6 +1327,61 @@ export const db = {
       console.error('Error updating mastery level:', error);
       throw error;
     }
+  },
+
+  // ========== TASK FAVORITES ==========
+  
+  async addTaskFavorite(taskId: number, memberId: number): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      const { error } = await supabase
+        .from('task_favorites')
+        .insert({
+          task_id: taskId,
+          member_id: memberId
+        });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding favorite:', error);
+      throw error;
+    }
+  },
+
+  async removeTaskFavorite(taskId: number, memberId: number): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      const { error } = await supabase
+        .from('task_favorites')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('member_id', memberId);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error removing favorite:', error);
+      throw error;
+    }
+  },
+
+  async getMemberFavorites(memberId: number): Promise<number[]> {
+    if (!supabase) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('task_favorites')
+        .select('task_id')
+        .eq('member_id', memberId);
+      
+      if (error) throw error;
+      
+      return data?.map(f => f.task_id) || [];
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+      return [];
+    }
   }
 }
 

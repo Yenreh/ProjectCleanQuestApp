@@ -4,7 +4,7 @@ import { Card } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
-import { CheckCircle2, Trash2, UtensilsCrossed, Sparkles, Circle, Lightbulb, AlertCircle, Calculator, ChevronDown, ChevronUp, GripVertical, TrendingUp, Heart, Loader2, X } from "lucide-react";
+import { CheckCircle2, Trash2, UtensilsCrossed, Sparkles, Circle, Lightbulb, AlertCircle, Calculator, ChevronDown, ChevronUp, TrendingUp, Heart, Loader2, X, ArrowRightLeft } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { db } from "../lib/db";
@@ -25,12 +25,13 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
   const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [showCalculation, setShowCalculation] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<number | null>(null);
-  const [reassignTarget, setReassignTarget] = useState<number | null>(null);
   const [quickProposal, setQuickProposal] = useState("");
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [currentTaskDialog, setCurrentTaskDialog] = useState<AssignmentWithDetails | null>(null);
   const [completedStepsInDialog, setCompletedStepsInDialog] = useState<Set<number>>(new Set());
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [taskToSwap, setTaskToSwap] = useState<AssignmentWithDetails | null>(null);
+  const [favoriteTasks, setFavoriteTasks] = useState<Set<number>>(new Set());
   
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
 
@@ -46,9 +47,10 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     
     setIsLoading(true);
     try {
-      const [myAssignments, homeMetrics] = await Promise.all([
+      const [myAssignments, homeMetrics, memberFavorites] = await Promise.all([
         db.getMyAssignments(currentMember.id, 'pending'),
-        db.getHomeMetrics(homeId)
+        db.getHomeMetrics(homeId),
+        db.getMemberFavorites(currentMember.id)
       ]);
       
       // Load step completions for each assignment to accurately calculate progress
@@ -78,6 +80,7 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       
       setAssignments(assignmentsWithStepInfo);
       setMetrics(homeMetrics);
+      setFavoriteTasks(new Set(memberFavorites));
     } catch (error) {
       console.error('Error loading home data:', error);
       toast.error('Error al cargar tareas');
@@ -198,23 +201,6 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     }
   };
 
-  const handleRequestReassignment = async () => {
-    if (!selectedTask || !reassignTarget) {
-      toast.error('Selecciona una tarea y un compañero');
-      return;
-    }
-
-    try {
-      await db.requestTaskExchange(currentMember!.id, selectedTask, 'swap', reassignTarget);
-      toast.success('Solicitud de intercambio enviada');
-      setSelectedTask(null);
-      setReassignTarget(null);
-    } catch (error) {
-      console.error('Error requesting reassignment:', error);
-      toast.error('Error al solicitar reasignación');
-    }
-  };
-
   const handleQuickProposal = async () => {
     if (!quickProposal.trim() || !homeId || !currentMember) {
       toast.error('Escribe una idea primero');
@@ -237,13 +223,53 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     }
   };
 
+  const handleToggleFavorite = async (taskId: number) => {
+    if (!currentMember) return;
+
+    const isFavorite = favoriteTasks.has(taskId);
+    
+    try {
+      if (isFavorite) {
+        await db.removeTaskFavorite(taskId, currentMember.id);
+        setFavoriteTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        toast.success('Quitado de favoritos');
+      } else {
+        await db.addTaskFavorite(taskId, currentMember.id);
+        setFavoriteTasks(prev => new Set([...prev, taskId]));
+        toast.success('Agregado a favoritos');
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast.error('Error al actualizar favoritos');
+    }
+  };
+
+  const handleOpenSwapModal = (assignment: AssignmentWithDetails) => {
+    setTaskToSwap(assignment);
+    setSwapModalOpen(true);
+  };
+
+  const handleSwapTask = async (targetAssignmentId: number) => {
+    if (!taskToSwap || !currentMember) return;
+
+    try {
+      await db.requestTaskExchange(currentMember.id, taskToSwap.id, 'swap', undefined, `Solicitud de intercambio con tarea ${targetAssignmentId}`);
+      toast.success('Solicitud de intercambio enviada');
+      setSwapModalOpen(false);
+      setTaskToSwap(null);
+    } catch (error) {
+      console.error('Error requesting swap:', error);
+      toast.error('Error al solicitar intercambio');
+    }
+  };
+
   const completionPercentage = metrics?.completion_percentage || 0;
   const rotationPercentage = metrics?.rotation_percentage || 0;
   const completedCount = assignments.filter(a => a.status === 'completed').length;
-
-  // Simulate what-if for expert level
-  const whatIfCompletion = selectedTask ? 85 : completionPercentage;
-  const whatIfRotation = selectedTask ? 22 : rotationPercentage;
 
   // Helper to get icon for task
   const getTaskIcon = (iconName?: string) => {
@@ -398,52 +424,6 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
         </Card>
       )}
 
-      {/* EXPERT+: What-If Impact Panel */}
-      {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && selectedTask && (
-        <Card className="p-4 mb-4 w-full bg-[#f0f7ff]">
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-5 h-5 text-[#89a7c4]" />
-            <h4>Impacto si reasignas</h4>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="p-3 bg-white rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Completitud</p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{whatIfCompletion}%</span>
-                <span className={`text-xs ${whatIfCompletion > completionPercentage ? 'text-green-500' : 'text-red-500'}`}>
-                  +{whatIfCompletion - completionPercentage}%
-                </span>
-              </div>
-            </div>
-            <div className="p-3 bg-white rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Rotación</p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{whatIfRotation}%</span>
-                <span className={`text-xs ${whatIfRotation < rotationPercentage ? 'text-green-500' : 'text-red-500'}`}>
-                  {whatIfRotation - rotationPercentage}%
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              size="sm" 
-              className="flex-1 bg-[#89a7c4] hover:bg-[#7496b0]"
-              onClick={handleRequestReassignment}
-            >
-              Solicitar reasignación
-            </Button>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => setSelectedTask(null)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </Card>
-      )}
-
       {/* MASTER+: Quick Controls */}
       {(masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-4 w-full bg-white">
@@ -524,31 +504,27 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
         <div className="space-y-3">
           {assignments.map((assignment) => {
             const cardBgColor = getTaskCardBackground(assignment);
+            const isFavorite = favoriteTasks.has(assignment.task_id);
             return (
               <Card 
                 key={assignment.id} 
-                className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                  (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") ? "cursor-move" : ""
-                } ${selectedTask === assignment.id ? "ring-2 ring-[#6fbd9d] shadow-md" : ""} ${cardBgColor}`}
-                draggable={masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary"}
-                onDragStart={() => (masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && setSelectedTask(assignment.id)}
-                onClick={() => {
-                  if (assignment.status !== 'completed') {
-                    openTaskDialog(assignment);
-                  }
-                }}
+                className={`p-4 transition-all hover:shadow-md ${cardBgColor}`}
               >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
-                  {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
-                    <GripVertical className="w-4 h-4 text-muted-foreground" />
-                  )}
                   <div className={`p-2 rounded-lg ${assignment.status === 'completed' ? 'bg-[#e9f5f0] text-[#6fbd9d]' : 'bg-[#f5f3ed] text-[#d4a574]'}`}>
                     {getTaskIcon(assignment.task_icon)}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={assignment.status === 'completed' ? 'text-muted-foreground line-through' : ''}>
+                      <span 
+                        className={`cursor-pointer ${assignment.status === 'completed' ? 'text-muted-foreground line-through' : ''}`}
+                        onClick={() => {
+                          if (assignment.status !== 'completed') {
+                            openTaskDialog(assignment);
+                          }
+                        }}
+                      >
                         {assignment.task_title}
                       </span>
                       {assignment.task_zone_name && (
@@ -585,21 +561,31 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
                     <CheckCircle2 className="w-5 h-5 text-[#6fbd9d]" />
                   ) : (
                     <>
-                      {masteryLevel === "novice" && (
-                        <Circle className="w-5 h-5 text-[#d4a574]" />
-                      )}
                       {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 px-2"
-                          onClick={(e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            toast.info('Marcar como favorito próximamente');
-                          }}
-                        >
-                          <Heart className="w-3 h-3" />
-                        </Button>
+                        <>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(assignment.task_id);
+                            }}
+                          >
+                            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleOpenSwapModal(assignment);
+                            }}
+                          >
+                            <ArrowRightLeft className="w-4 h-4" />
+                          </Button>
+                        </>
                       )}
                     </>
                   )}
@@ -778,6 +764,74 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
               <p>Cargando...</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Swap Task Modal */}
+      <Dialog open={swapModalOpen} onOpenChange={setSwapModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5 text-[#89a7c4]" />
+              <span>Intercambiar tarea</span>
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona con quién intercambiar tu tarea
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {taskToSwap && (
+              <div className="p-3 bg-[#f5f3ed] rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Tarea a intercambiar:</p>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-white text-[#d4a574]">
+                    {getTaskIcon(taskToSwap.task_icon)}
+                  </div>
+                  <span className="font-medium">{taskToSwap.task_title}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Otras tareas pendientes:</p>
+              {assignments
+                .filter(a => a.id !== taskToSwap?.id && a.status === 'pending')
+                .map(assignment => (
+                  <button
+                    key={assignment.id}
+                    onClick={() => handleSwapTask(assignment.id)}
+                    className="w-full p-3 bg-white border border-border rounded-lg hover:bg-[#f5f3ed] transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-[#f5f3ed] text-[#d4a574]">
+                        {getTaskIcon(assignment.task_icon)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{assignment.task_title}</p>
+                        {assignment.task_zone_name && (
+                          <p className="text-xs text-muted-foreground">
+                            {assignment.task_zone_name}
+                          </p>
+                        )}
+                      </div>
+                      <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSwapModalOpen(false);
+                setTaskToSwap(null);
+              }}
+              className="w-full"
+            >
+              Cancelar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
