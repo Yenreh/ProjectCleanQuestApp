@@ -560,7 +560,7 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
                     {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">
-                          {new Date(assignment.assigned_date).toLocaleDateString('es-ES', { weekday: 'short' })}
+                          {new Date(assignment.assigned_date).toLocaleDateString('es-CO', { weekday: 'short' })}
                         </span>
                         {assignment.task_effort && (
                           <>
