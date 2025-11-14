@@ -292,13 +292,15 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       <div className="w-full mb-6">
         <div className="flex items-center justify-between mb-2">
           <h1>¡Bienvenido/a, {userName}!</h1>
-          <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
-            {masteryLevel === "novice" && "Novato"}
-            {masteryLevel === "solver" && "Solucionador"}
-            {masteryLevel === "expert" && "Experto"}
-            {masteryLevel === "master" && "Maestro"}
-            {masteryLevel === "visionary" && "Visionario"}
-          </Badge>
+          {(import.meta as any).env?.VITE_DEV_MODE === 'true' && (
+            <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
+              {masteryLevel === "novice" && "Novato"}
+              {masteryLevel === "solver" && "Solucionador"}
+              {masteryLevel === "expert" && "Experto"}
+              {masteryLevel === "master" && "Maestro"}
+              {masteryLevel === "visionary" && "Visionario"}
+            </Badge>
+          )}
         </div>
         <p className="text-muted-foreground">
           {masteryLevel === "novice" && "Tu primera semana en CleanQuest"}
