@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { Card } from "./ui/card"
 import { Button } from "./ui/button"
-import { InputWithIcon } from "./ui/input-with-icon"
+import { Input } from "./ui/input"
 import { Label } from "./ui/label"
-import { Sparkles, Mail, Lock, User } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import { db } from "../lib/db"
 import { toast } from "sonner"
 
@@ -57,14 +57,12 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
           {!isLogin && (
             <div className="space-y-2">
               <Label htmlFor="fullName" className="text-sm font-medium">Nombre completo</Label>
-              <InputWithIcon
+              <Input
                 id="fullName"
                 type="text"
                 placeholder="Ana García"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="h-11"
-                icon={<User className="w-4 h-4 text-muted-foreground" />}
                 required={!isLogin}
               />
             </div>
@@ -72,28 +70,24 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
 
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-medium">Correo electrónico</Label>
-            <InputWithIcon
+            <Input
               id="email"
               type="email"
               placeholder="tu@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11"
-              icon={<Mail className="w-4 h-4 text-muted-foreground" />}
               required
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="password" className="text-sm font-medium">Contraseña</Label>
-            <InputWithIcon
+            <Input
               id="password"
               type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11"
-              icon={<Lock className="w-4 h-4 text-muted-foreground" />}
               required
               minLength={6}
             />
