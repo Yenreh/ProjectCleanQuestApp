@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { RemoveMemberConfirmDialog } from "./RemoveMemberConfirmDialog";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -80,6 +81,10 @@ export function HomeManagementDialog({
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("member");
+  const [editingMember, setEditingMember] = useState<HomeMember | null>(null);
+  const [editMemberRole, setEditMemberRole] = useState<MemberRole>("member");
+  const [memberToRemove, setMemberToRemove] = useState<HomeMember | null>(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Home config state
   const [homeName, setHomeName] = useState(currentHome?.name || "");
@@ -345,8 +350,18 @@ export function HomeManagementDialog({
 
     setIsLoading(true);
     try {
-      await db.inviteMember(homeId, { email: inviteEmail, role: inviteRole });
-      toast.success('Invitación enviada');
+      const result = await db.inviteMember(homeId, { email: inviteEmail, role: inviteRole });
+      
+      // Show invitation link that can be copied
+      if (result.invite_link) {
+        navigator.clipboard.writeText(result.invite_link);
+        toast.success('Invitación enviada', {
+          description: 'Link copiado al portapapeles. Compártelo con el nuevo miembro.'
+        });
+      } else {
+        toast.success('Invitación enviada');
+      }
+      
       handleCancelInviteForm();
       await loadData();
     } catch (error) {
@@ -371,17 +386,56 @@ export function HomeManagementDialog({
     }
   };
 
-  const handleRemoveMember = async (memberId: number) => {
-    if (!confirm('¿Remover este miembro del hogar?')) return;
+  const handleRemoveMember = (member: HomeMember) => {
+    setMemberToRemove(member);
+    setShowRemoveConfirm(true);
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
 
     setIsLoading(true);
     try {
-      await db.removeMember(memberId);
-      toast.success('Miembro removido');
+      await db.removeMember(memberToRemove.id);
+      toast.success('Miembro removido del hogar');
+      setShowRemoveConfirm(false);
+      setMemberToRemove(null);
       await loadData();
     } catch (error) {
       console.error('Error removing member:', error);
       toast.error('Error al remover miembro');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelRemoveMember = () => {
+    setShowRemoveConfirm(false);
+    setMemberToRemove(null);
+  };
+
+  const handleEditMember = (member: HomeMember) => {
+    setEditingMember(member);
+    setEditMemberRole(member.role);
+  };
+
+  const handleCancelEditMember = () => {
+    setEditingMember(null);
+    setEditMemberRole("member");
+  };
+
+  const handleSaveMemberRole = async () => {
+    if (!editingMember) return;
+
+    setIsLoading(true);
+    try {
+      await db.updateMemberRole(editingMember.id, editMemberRole);
+      toast.success('Rol actualizado');
+      setEditingMember(null);
+      await loadData();
+    } catch (error) {
+      console.error('Error updating member role:', error);
+      toast.error('Error al actualizar rol');
     } finally {
       setIsLoading(false);
     }
@@ -427,7 +481,7 @@ export function HomeManagementDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
-        className="max-w-3xl h-[95vh] overflow-y-auto overflow-x-hidden"
+        className="max-w-3xl max-h-[90vh] flex flex-col"
       >
         <DialogHeader>
           <DialogTitle>Gestión del hogar</DialogTitle>
@@ -436,21 +490,22 @@ export function HomeManagementDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="tasks" className="w-full mt-4">
-          <TabsList className="w-full !grid grid-cols-4 mb-6">
-            <TabsTrigger value="tasks">
-              <ClipboardList className="w-4 h-4" />
-            </TabsTrigger>
-            <TabsTrigger value="zones">
-              <MapPin className="w-4 h-4" />
-            </TabsTrigger>
-            <TabsTrigger value="members">
-              <Users className="w-4 h-4" />
-            </TabsTrigger>
-            <TabsTrigger value="config">
-              <Settings className="w-4 h-4" />
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden -mx-6">
+          <Tabs defaultValue="tasks" className="w-full mt-4">
+            <TabsList className="w-full !grid grid-cols-4 mb-6">
+              <TabsTrigger value="tasks">
+                <ClipboardList className="w-4 h-4" />
+              </TabsTrigger>
+              <TabsTrigger value="zones">
+                <MapPin className="w-4 h-4" />
+              </TabsTrigger>
+              <TabsTrigger value="members">
+                <Users className="w-4 h-4" />
+              </TabsTrigger>
+              <TabsTrigger value="config">
+                <Settings className="w-4 h-4" />
+              </TabsTrigger>
+            </TabsList>
 
           {/* TASKS TAB */}
           <TabsContent value="tasks">
@@ -832,7 +887,7 @@ export function HomeManagementDialog({
           {/* MEMBERS TAB */}
           <TabsContent value="members">
             <div className="space-y-3">
-              {!showInviteForm ? (
+              {!showInviteForm && !editingMember ? (
                 <>
                   <div className="flex justify-between items-center">
                     <h4 className="text-sm font-medium">Miembros</h4>
@@ -851,23 +906,86 @@ export function HomeManagementDialog({
                             <div>
                               <p className="text-sm font-medium">{member.full_name || member.email}</p>
                               <p className="text-xs text-muted-foreground">{member.email}</p>
+                              <Badge variant="outline" className="text-xs mt-1">
+                                {member.role === 'owner' ? 'Dueño' : member.role === 'admin' ? 'Admin' : 'Miembro'}
+                              </Badge>
                             </div>
                           </div>
-                          {currentMember.role === 'owner' && member.id !== currentMember.id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleRemoveMember(member.id)}
-                            >
-                              <Trash2 className="w-3 h-3 text-red-500" />
-                            </Button>
+                          {currentMember?.role === 'owner' && member.id !== currentMember.id && (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEditMember(member)}
+                                title="Editar rol"
+                              >
+                                <Edit className="w-3 h-3 text-blue-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleRemoveMember(member)}
+                                title="Remover miembro"
+                              >
+                                <Trash2 className="w-3 h-3 text-red-500" />
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </Card>
                     ))}
                   </div>
                 </>
+              ) : editingMember ? (
+                <Card className="p-4">
+                  <h4 className="text-sm font-medium mb-4">Editar rol de miembro</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Miembro</Label>
+                      <Input
+                        value={editingMember.full_name || editingMember.email}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="edit-member-role">Rol</Label>
+                      <Select value={editMemberRole} onValueChange={(value: string) => setEditMemberRole(value as MemberRole)}>
+                        <SelectTrigger id="edit-member-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">Miembro</SelectItem>
+                          <SelectItem value="admin">Administrador</SelectItem>
+                          {currentMember?.role === 'owner' && (
+                            <SelectItem value="owner">Dueño</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelEditMember}
+                        className="flex-1"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        onClick={handleSaveMemberRole}
+                        disabled={isLoading}
+                        className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
+                      >
+                        {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        Guardar
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
               ) : (
                 <Card className="p-4">
                   <h4 className="text-sm font-medium mb-4">Invitar miembro</h4>
@@ -989,6 +1107,7 @@ export function HomeManagementDialog({
             </div>
           </TabsContent>
         </Tabs>
+        </div>
 
         <Button
           variant="outline"
@@ -998,6 +1117,19 @@ export function HomeManagementDialog({
           Cerrar
         </Button>
       </DialogContent>
+
+      {/* Remove Member Confirmation Dialog */}
+      {memberToRemove && (
+        <RemoveMemberConfirmDialog
+          open={showRemoveConfirm}
+          onOpenChange={setShowRemoveConfirm}
+          memberName={memberToRemove.full_name || memberToRemove.email}
+          memberEmail={memberToRemove.email}
+          onConfirm={handleConfirmRemoveMember}
+          onCancel={handleCancelRemoveMember}
+          isLoading={isLoading}
+        />
+      )}
     </Dialog>
   );
 }

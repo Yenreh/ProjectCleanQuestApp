@@ -1,22 +1,46 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "../ui/card"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
-import { Sparkles, Mail, Lock, User } from "lucide-react"
+import { Sparkles, Mail, Lock, User, UserPlus } from "lucide-react"
 import { db } from "../../lib/db"
 import { toast } from "sonner"
 
 interface AuthScreenProps {
-  onSuccess: () => void
+  onSuccess: () => void;
+  invitationToken?: string | null;
 }
 
-export function AuthView({ onSuccess }: AuthScreenProps) {
+export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [loading, setLoading] = useState(false)
+  const [invitationInfo, setInvitationInfo] = useState<any>(null)
+
+  useEffect(() => {
+    if (invitationToken) {
+      loadInvitationInfo();
+    }
+  }, [invitationToken]);
+
+  const loadInvitationInfo = async () => {
+    if (!invitationToken) return;
+    
+    try {
+      const invitation = await db.getInvitationByToken(invitationToken);
+      if (invitation) {
+        setInvitationInfo(invitation);
+        setEmail(invitation.email);
+        setIsLogin(false); // Default to signup for new invitations
+        toast.info(`Invitación para unirte a ${invitation.homes?.name || 'la casa'}`);
+      }
+    } catch (error) {
+      console.error('Error loading invitation:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +52,7 @@ export function AuthView({ onSuccess }: AuthScreenProps) {
         toast.success("¡Bienvenido de vuelta!")
       } else {
         await db.signUp(email, password, fullName)
-        toast.success("¡Cuenta creada! Verifica tu email para continuar.")
+        toast.success("¡Cuenta creada!")
       }
       onSuccess()
     } catch (error: any) {
@@ -48,9 +72,24 @@ export function AuthView({ onSuccess }: AuthScreenProps) {
               <Sparkles className="w-12 h-12 sm:w-14 sm:h-14 text-[#6fbd9d]" strokeWidth={2.5} />
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold mb-2">CleanQuest</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              Gamifica la limpieza de tu hogar
-            </p>
+            
+            {invitationInfo ? (
+              <div className="space-y-2">
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  Has sido invitado a unirte a
+                </p>
+                <div className="bg-[#e9f5f0] p-3 rounded-lg flex items-center gap-2 justify-center">
+                  <UserPlus className="w-5 h-5 text-[#6fbd9d]" />
+                  <span className="font-medium text-[#6fbd9d]">
+                    {invitationInfo.homes?.name || 'Casa Compartida'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm sm:text-base text-muted-foreground">
+                Gamifica la limpieza de tu hogar
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">

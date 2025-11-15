@@ -12,22 +12,24 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Avatar, AvatarFallback } from "../ui/avatar";
-import { User, Shield, Settings, Loader2, EyeOff, Eye } from "lucide-react";
+import { User, Shield, Settings, Loader2, EyeOff, Eye, Home, AlertTriangle, Bell } from "lucide-react";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
-import type { HomeMember } from "../../lib/types";
+import type { HomeMember, Home as HomeType } from "../../lib/types";
 
 interface ProfileSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentMember: HomeMember | null;
+  currentHome: HomeType | null;
   onUpdate?: () => void;
 }
 
 export function ProfileSettingsDialog({ 
   open, 
   onOpenChange, 
-  currentMember, 
+  currentMember,
+  currentHome,
   onUpdate 
 }: ProfileSettingsDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +48,10 @@ export function ProfileSettingsDialog({
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
+
+  // Change home state
+  const [inviteToken, setInviteToken] = useState("");
+  const [showChangeHomeConfirm, setShowChangeHomeConfirm] = useState(false);
 
   useEffect(() => {
     if (currentMember) {
@@ -126,6 +132,38 @@ export function ProfileSettingsDialog({
     }
   };
 
+  const handleChangeHome = async () => {
+    if (!inviteToken.trim()) {
+      toast.error("Ingresa un token de invitación válido");
+      return;
+    }
+
+    const user = await db.getCurrentUser();
+    if (!user) {
+      toast.error("Usuario no encontrado");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await db.changeHome(user.id, inviteToken.trim());
+      toast.success("¡Te has cambiado de casa exitosamente!");
+      setInviteToken("");
+      setShowChangeHomeConfirm(false);
+      onOpenChange(false);
+      
+      // Reload page to update all data
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error: any) {
+      console.error('Error changing home:', error);
+      toast.error(error.message || "Error al cambiar de casa");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!currentMember) return null;
 
   const initials = currentMember.full_name
@@ -148,16 +186,19 @@ export function ProfileSettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="personal" className="w-full mt-4">
-          <TabsList className="w-full !grid grid-cols-3 mb-6">
+        <Tabs defaultValue="personal" className="w-full">
+          <TabsList className="w-full !grid grid-cols-4 mb-6">
             <TabsTrigger value="personal">
-              <User className="w-4 h-4" />
+              <User className="h-4 w-4" />
             </TabsTrigger>
             <TabsTrigger value="security">
-              <Shield className="w-4 h-4" />
+              <Shield className="h-4 w-4" />
             </TabsTrigger>
             <TabsTrigger value="preferences">
-              <Settings className="w-4 h-4" />
+              <Bell className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="home">
+              <Home className="h-4 w-4" />
             </TabsTrigger>
           </TabsList>
 
@@ -344,6 +385,68 @@ export function ProfileSettingsDialog({
               >
                 {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Guardar preferencias
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="home" className="space-y-4 mt-6">
+            <Card className="p-4 bg-muted/30">
+              <h3 className="font-semibold mb-2">Casa actual</h3>
+              <p className="text-sm text-muted-foreground">
+                {currentHome?.name || "No estás en ninguna casa"}
+              </p>
+            </Card>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Token de invitación</Label>
+                <Input
+                  type="text"
+                  placeholder="Pega el token de invitación aquí"
+                  value={inviteToken}
+                  onChange={(e) => setInviteToken(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ingresa el token de invitación a una nueva casa
+                </p>
+              </div>
+
+              <Card className="p-4 border-yellow-500/50 bg-yellow-500/10">
+                <div className="flex gap-3">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-sm">Advertencia</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Al cambiar de casa, tu membresía actual se desactivará. 
+                      Perderás acceso a las tareas, estadísticas y configuración de tu casa actual.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="confirmChange"
+                  checked={showChangeHomeConfirm}
+                  onChange={(e) => setShowChangeHomeConfirm(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <label
+                  htmlFor="confirmChange"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Entiendo las consecuencias y quiero cambiar de casa
+                </label>
+              </div>
+
+              <Button 
+                onClick={handleChangeHome}
+                disabled={isLoading || !showChangeHomeConfirm || !inviteToken.trim()}
+                className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+              >
+                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Cambiar de casa
               </Button>
             </div>
           </TabsContent>

@@ -284,26 +284,156 @@ export const db = {
   async inviteMember(homeId: number, invitation: InviteMemberInput) {
     if (!supabase) throw new Error('Supabase not configured')
     
+    // Check if member already exists (might be inactive)
+    const { data: existingMember } = await supabase
+      .from('home_members')
+      .select('*')
+      .eq('home_id', homeId)
+      .eq('email', invitation.email)
+      .maybeSingle()
+    
     const token = crypto.randomUUID()
+    
+    let data;
+    
+    if (existingMember) {
+      // Member exists, reactivate them with new token
+      const { data: updated, error } = await supabase
+        .from('home_members')
+        .update({
+          role: invitation.role || 'member',
+          status: 'pending',
+          invitation_token: token,
+          user_id: null, // Clear user_id so they can re-register
+        })
+        .eq('id', existingMember.id)
+        .select()
+        .single()
+      
+      if (error) throw error
+      data = updated
+    } else {
+      // New member, create invitation
+      const { data: created, error } = await supabase
+        .from('home_members')
+        .insert({
+          home_id: homeId,
+          email: invitation.email,
+          role: invitation.role || 'member',
+          status: 'pending',
+          invitation_token: token,
+          mastery_level: 'novice'
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      data = created
+    }
+    
+    // TODO: Send invitation email with token
+    // For now, return the invitation link that can be shared
+    const inviteLink = `${window.location.origin}?invite=${token}`;
+    console.log('Invitation link:', inviteLink);
+    
+    return { ...data, invite_link: inviteLink };
+  },
+
+  async getInvitationByToken(token: string) {
+    if (!supabase) return null;
     
     const { data, error } = await supabase
       .from('home_members')
-      .insert({
-        home_id: homeId,
-        email: invitation.email,
-        role: invitation.role || 'member',
-        status: 'pending',
-        invitation_token: token,
-        mastery_level: 'novice'
+      .select(`
+        *,
+        homes!inner (
+          id,
+          name,
+          created_by
+        )
+      `)
+      .eq('invitation_token', token)
+      .eq('status', 'pending')
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      throw error;
+    }
+    
+    return data;
+  },
+
+  async acceptInvitation(token: string, userId: string) {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    // First, get the invitation
+    const invitation = await this.getInvitationByToken(token);
+    if (!invitation) {
+      throw new Error('Invitación no válida o expirada');
+    }
+
+    // Get user profile
+    const profile = await this.getProfile(userId);
+    if (!profile) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Check if user already has an active membership in another home
+    const { data: existingMembership } = await supabase
+      .from('home_members')
+      .select('id, home_id')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    // If user has existing membership, deactivate it
+    if (existingMembership) {
+      await supabase
+        .from('home_members')
+        .update({ status: 'inactive' })
+        .eq('id', existingMembership.id);
+    }
+
+    // Update the member record to activate it
+    const { data, error } = await supabase
+      .from('home_members')
+      .update({
+        user_id: userId,
+        status: 'active',
+        joined_at: new Date().toISOString(),
+        invitation_token: null // Clear the token after use
       })
+      .eq('invitation_token', token)
       .select()
-      .single()
+      .single();
     
-    if (error) throw error
-    
-    // TODO: Send invitation email with token
-    
-    return data
+    if (error) throw error;
+
+    // Mark user as having completed onboarding
+    await this.markOnboardingComplete(userId);
+
+    return data;
+  },
+
+  async changeHome(userId: string, newHomeToken: string) {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    // Validate the new home invitation
+    const invitation = await this.getInvitationByToken(newHomeToken);
+    if (!invitation) {
+      throw new Error('Token de invitación no válido');
+    }
+
+    // Deactivate all current memberships for this user
+    await supabase
+      .from('home_members')
+      .update({ status: 'inactive' })
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    // Accept the new invitation
+    return await this.acceptInvitation(newHomeToken, userId);
   },
 
   async getHomeMembers(homeId: number): Promise<HomeMember[]> {
@@ -316,6 +446,7 @@ export const db = {
         profiles!home_members_user_id_fkey(full_name)
       `)
       .eq('home_id', homeId)
+      .eq('status', 'active')  // Only get active members
       .order('created_at', { ascending: true })
     
     if (error) throw error
@@ -362,12 +493,49 @@ export const db = {
   async removeMember(memberId: number) {
     if (!supabase) throw new Error('Supabase not configured')
     
+    // Get the member's user_id before updating
+    const { data: member } = await supabase
+      .from('home_members')
+      .select('user_id')
+      .eq('id', memberId)
+      .single()
+    
+    // Soft delete: mark as inactive instead of deleting
+    // This preserves task history, achievements, and completions
     const { error } = await supabase
       .from('home_members')
-      .delete()
+      .update({ status: 'inactive' })
       .eq('id', memberId)
     
     if (error) throw error
+
+    // Unassign all tasks from this member
+    await supabase
+      .from('task_assignments')
+      .delete()
+      .eq('member_id', memberId)
+    
+    // Mark user's onboarding as incomplete so they can rejoin or create a new home
+    if (member?.user_id) {
+      await supabase
+        .from('profiles')
+        .update({ has_completed_onboarding: false })
+        .eq('id', member.user_id)
+    }
+  },
+
+  async updateMemberRole(memberId: number, newRole: string) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data, error } = await supabase
+      .from('home_members')
+      .update({ role: newRole })
+      .eq('id', memberId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
   },
 
   // ========== TASKS ==========
@@ -918,25 +1086,6 @@ export const db = {
 
       if (tasksError) throw tasksError;
 
-      // Filtrar tareas: solo las que no están pendientes ni completadas
-      const unassignedTasks = (availableTasks || [])
-        .filter((task: any) => !pendingTaskIds.has(task.id) && !completedTaskIds.has(task.id))
-        .map((task: any) => ({
-          cancellation_id: 0,
-          assignment_id: 0,
-          task_id: task.id,
-          task_title: task.title,
-          task_icon: task.icon,
-          task_effort: task.effort_points,
-          zone_name: task.zones?.name || 'Sin zona',
-          cancelled_by_id: 0,
-          cancelled_by_name: 'Sistema',
-          cancellation_reason: 'Tarea disponible en el ciclo',
-          cancelled_at: new Date().toISOString(),
-          assigned_date: new Date().toISOString(),
-          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        }));
-
       // Transformar tareas canceladas
       const cancelledTasks = (cancelledData || []).map((item: any) => ({
         cancellation_id: item.id,
@@ -953,6 +1102,32 @@ export const db = {
         assigned_date: item.task_assignments.assigned_date,
         due_date: item.task_assignments.due_date
       }));
+
+      // Crear set de task_ids de tareas canceladas para evitar duplicados
+      const cancelledTaskIds = new Set(cancelledTasks.map((t: any) => t.task_id));
+
+      // Filtrar tareas sin asignar: solo las que no están pendientes, completadas NI canceladas
+      const unassignedTasks = (availableTasks || [])
+        .filter((task: any) => 
+          !pendingTaskIds.has(task.id) && 
+          !completedTaskIds.has(task.id) &&
+          !cancelledTaskIds.has(task.id)
+        )
+        .map((task: any) => ({
+          cancellation_id: 0,
+          assignment_id: 0,
+          task_id: task.id,
+          task_title: task.title,
+          task_icon: task.icon,
+          task_effort: task.effort_points,
+          zone_name: task.zones?.name || 'Sin zona',
+          cancelled_by_id: 0,
+          cancelled_by_name: 'Sistema',
+          cancellation_reason: 'Tarea disponible en el ciclo',
+          cancelled_at: new Date().toISOString(),
+          assigned_date: new Date().toISOString(),
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        }));
 
       // Combinar ambas listas
       return [...cancelledTasks, ...unassignedTasks];
@@ -1649,17 +1824,57 @@ export const db = {
     
     const rotationPolicy = home?.rotation_policy || 'weekly';
     
-    // Calcular inicio y fin del ciclo actual
+    // Buscar la fecha de inicio real del ciclo actual
+    // (la asignación más reciente de tareas no-skipped, que sería después de un force)
+    const { data: recentAssignments } = await supabase
+      .from('task_assignments')
+      .select('assigned_date, home_members!inner(home_id)')
+      .eq('home_members.home_id', homeId)
+      .neq('status', 'skipped')
+      .order('assigned_date', { ascending: false })
+      .limit(1);
+    
+    let cycleStartStr: string;
+    
+    if (recentAssignments && recentAssignments.length > 0) {
+      // Si hay asignaciones, usar la fecha de la más reciente como referencia
+      // Buscar todas las asignaciones desde esa fecha
+      const latestAssignmentDate = recentAssignments[0].assigned_date;
+      
+      // Buscar la fecha mínima de asignaciones no-skipped desde esa fecha
+      const { data: allRecentAssignments } = await supabase
+        .from('task_assignments')
+        .select('assigned_date, home_members!inner(home_id)')
+        .eq('home_members.home_id', homeId)
+        .neq('status', 'skipped')
+        .gte('assigned_date', latestAssignmentDate)
+        .order('assigned_date', { ascending: true })
+        .limit(1);
+      
+      if (allRecentAssignments && allRecentAssignments.length > 0) {
+        cycleStartStr = allRecentAssignments[0].assigned_date;
+      } else {
+        // Fallback al cálculo por política
+        const today = new Date();
+        const cycleStart = this.getCycleStartDate(rotationPolicy, today);
+        cycleStartStr = cycleStart.toISOString().split('T')[0];
+      }
+    } else {
+      // No hay asignaciones, usar el cálculo por política
+      const today = new Date();
+      const cycleStart = this.getCycleStartDate(rotationPolicy, today);
+      cycleStartStr = cycleStart.toISOString().split('T')[0];
+    }
+    
     const today = new Date();
-    const cycleStart = this.getCycleStartDate(rotationPolicy, today);
-    const cycleStartStr = cycleStart.toISOString().split('T')[0];
     const todayStr = today.toISOString().split('T')[0];
     
     const { data: assignments } = await supabase
       .from('task_assignments')
       .select('*, home_members!inner(home_id)')
       .eq('home_members.home_id', homeId)
-      .gte('assigned_date', cycleStartStr);
+      .gte('assigned_date', cycleStartStr)
+      .neq('status', 'skipped'); // Excluir tareas saltadas
     
     const totalTasks = assignments?.length || 0;
     const completedTasks = assignments?.filter(a => a.status === 'completed').length || 0;
@@ -1797,11 +2012,27 @@ export const db = {
       
       // 2. Calcular nuevo ciclo
       const nextCycleStart = this.getCycleEndDate(rotationPolicy, currentCycleStart);
+      const nextCycleStartStr = nextCycleStart.toISOString().split('T')[0];
       
-      // 3. Reasignar todas las tareas para el nuevo ciclo
+      // 3. Eliminar asignaciones futuras existentes (por si se fuerza múltiples veces)
+      const { data: futureAssignments } = await supabase
+        .from('task_assignments')
+        .select('id, home_members!inner(home_id)')
+        .eq('home_members.home_id', homeId)
+        .gte('assigned_date', nextCycleStartStr);
+      
+      if (futureAssignments && futureAssignments.length > 0) {
+        const futureAssignmentIds = futureAssignments.map(a => a.id);
+        await supabase
+          .from('task_assignments')
+          .delete()
+          .in('id', futureAssignmentIds);
+      }
+      
+      // 4. Reasignar todas las tareas para el nuevo ciclo
       const assignments = await this.autoAssignTasks(homeId, nextCycleStart);
       
-      // 4. Registrar en change_log
+      // 5. Registrar en change_log
       await supabase.from('change_log').insert({
         home_id: homeId,
         change_type: 'cycle_rotation',

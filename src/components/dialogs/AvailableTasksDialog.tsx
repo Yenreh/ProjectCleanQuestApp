@@ -83,7 +83,7 @@ export function AvailableTasksDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-[#d4a574]" />
@@ -94,7 +94,8 @@ export function AvailableTasksDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 mt-4">
+        <div className="flex-1 overflow-y-auto px-1">
+          <div className="space-y-3 mt-4">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="w-8 h-8 text-[#6fbd9d] animate-spin mb-4" />
@@ -113,9 +114,6 @@ export function AvailableTasksDialog({
             tasks.map((task) => (
               <Card key={task.cancellation_id === 0 ? `unassigned-${task.task_id}` : `cancelled-${task.cancellation_id}`} className="p-4">
                 <div className="flex gap-3">
-                  <div className="p-2 rounded-lg bg-[#f5f3ed] text-[#d4a574] h-fit">
-                    {getTaskIcon(task.task_icon)}
-                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
@@ -129,6 +127,7 @@ export function AvailableTasksDialog({
                       <Badge className="bg-[#fef3e0] text-[#d4a574] whitespace-nowrap">
                         {task.task_effort} pts
                       </Badge>
+                      
                     </div>
 
                     <div className="space-y-2 mb-3">
@@ -178,17 +177,18 @@ export function AvailableTasksDialog({
               </Card>
             ))
           )}
+          
+          {tasks.length > 0 && (
+            <div className="mt-4 p-3 bg-[#f0f7ff] rounded-lg text-sm text-muted-foreground">
+              <p>
+                💡 Al tomar una tarea, esta se asignará a ti y desaparecerá de la lista de disponibles.
+              </p>
+            </div>
+          )}
+          </div>
         </div>
 
-        {tasks.length > 0 && (
-          <div className="mt-4 p-3 bg-[#f0f7ff] rounded-lg text-sm text-muted-foreground">
-            <p>
-              💡 Al tomar una tarea, esta se asignará a ti y desaparecerá de la lista de disponibles.
-            </p>
-          </div>
-        )}
-
-        <div className="mt-4 flex justify-center">
+        <div className="mt-4 flex justify-center border-t pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>

@@ -8,6 +8,7 @@ import { AuthView } from "./components/panels/AuthView";
 import { ProfileSettingsDialog } from "./components/dialogs/ProfileSettingsDialog";
 import { HomeManagementDialog } from "./components/dialogs/HomeManagementDialog";
 import { GeneralSettingsDialog } from "./components/dialogs/GeneralSettingsDialog";
+import { ChangeHomeConfirmDialog } from "./components/dialogs/ChangeHomeConfirmDialog";
 import { Home, BarChart3, Trophy, Sparkles, Settings, User, Users, ListTodo, HomeIcon, Clock, ChevronDown, LogOut } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ export default function App() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
   const [masteryLevel, setMasteryLevel] = useState<MasteryLevel>("novice");
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   
   // User and home data
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
@@ -45,9 +47,62 @@ export default function App() {
   const [homeManagementOpen, setHomeManagementOpen] = useState(false);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
   
+  // Change home confirmation dialog state
+  const [showChangeHomeDialog, setShowChangeHomeDialog] = useState(false);
+  const [changeHomeData, setChangeHomeData] = useState<{
+    token: string;
+    currentHomeName: string;
+    newHomeName: string;
+  } | null>(null);
+  const [isChangingHome, setIsChangingHome] = useState(false);
+  
   // Información del usuario
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
   const userInitials = userName.substring(0, 2).toUpperCase();
+
+  // Check for invitation token in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('invite');
+    if (token) {
+      setInvitationToken(token);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // If user is already authenticated, check if they have an active home
+      (async () => {
+        const user = await db.getCurrentUser();
+        if (user) {
+          // Check if user already has an active membership
+          const { member, home } = await db.getUserHomeMembership(user.id);
+          
+          if (member && home) {
+            // User already has a home, show confirmation dialog
+            const invitationInfo = await db.getInvitationByToken(token);
+            if (invitationInfo) {
+              setChangeHomeData({
+                token,
+                currentHomeName: home.name,
+                newHomeName: invitationInfo.homes.name
+              });
+              setShowChangeHomeDialog(true);
+            }
+          } else {
+            // User doesn't have a home, accept invitation directly
+            try {
+              await db.acceptInvitation(token, user.id);
+              toast.success('¡Te has unido al hogar!');
+              setInvitationToken(null);
+              await loadUserData(user.id);
+            } catch (error: any) {
+              console.error('Error accepting invitation:', error);
+              toast.error(error.message || 'Error al aceptar la invitación');
+            }
+          }
+        }
+      })();
+    }
+  }, []);
 
   // Check authentication on mount
   useEffect(() => {
@@ -87,52 +142,80 @@ export default function App() {
   const loadUserData = async (userId: string) => {
     try {
       // Get user profile
-      const profile = await db.getProfile(userId);
-      if (profile) {
-        setCurrentUser(profile);
+      let profile = await db.getProfile(userId);
+      if (!profile) {
+        setIsLoading(false);
+        return;
+      }
+      
+      setCurrentUser(profile);
+      
+      // Check if user has a pending invitation by token
+      if (invitationToken) {
+        try {
+          // Accept invitation if token is present
+          await db.acceptInvitation(invitationToken, userId);
+          toast.success('¡Te has unido al hogar!');
+          setInvitationToken(null);
+          
+          // Reload profile after accepting invitation to get updated onboarding status
+          const updatedProfile = await db.getProfile(userId);
+          if (updatedProfile) {
+            profile = updatedProfile;
+            setCurrentUser(updatedProfile);
+          }
+        } catch (error) {
+          console.error('Error accepting invitation:', error);
+          toast.error('Error al aceptar la invitación');
+        }
+      }
+      
+      // Check onboarding status from profile
+      if (profile.has_completed_onboarding) {
+        // Load home membership data
+        const { member, home } = await db.getUserHomeMembership(userId);
         
-        // Check onboarding status from profile
-        if (profile.has_completed_onboarding) {
+        if (member && home) {
           setHasCompletedOnboarding(true);
+          setCurrentHome(home);
+          setCurrentMember(member);
           
-          // Load home membership data
-          const { member, home } = await db.getUserHomeMembership(userId);
+          // Get member achievements count for mastery calculation
+          const achievementsCount = await db.getMemberAchievementsCount(member.id);
           
-          if (member && home) {
-            setCurrentHome(home);
-            setCurrentMember(member);
+          // Calculate mastery level
+          const previousLevel = member.mastery_level as MasteryLevel;
+          const newLevel = calculateMasteryLevel({
+            totalPoints: member.total_points || 0,
+            achievementsUnlocked: achievementsCount,
+            weeksActive: member.weeks_active || 0,
+            tasksCompleted: member.tasks_completed || 0
+          });
+          
+          setMasteryLevel(newLevel);
+          
+          // Update level in database if changed
+          if (previousLevel !== newLevel) {
+            await db.updateMemberMasteryLevel(member.id, newLevel);
             
-            // Get member achievements count for mastery calculation
-            const achievementsCount = await db.getMemberAchievementsCount(member.id);
-            
-            // Calculate mastery level
-            const previousLevel = member.mastery_level as MasteryLevel;
-            const newLevel = calculateMasteryLevel({
-              totalPoints: member.total_points || 0,
-              achievementsUnlocked: achievementsCount,
-              weeksActive: member.weeks_active || 0,
-              tasksCompleted: member.tasks_completed || 0
-            });
-            
-            setMasteryLevel(newLevel);
-            
-            // Update level in database if changed
-            if (previousLevel !== newLevel) {
-              await db.updateMemberMasteryLevel(member.id, newLevel);
-              
-              // Check if user leveled up (not down)
-              if (checkLevelUp(previousLevel, newLevel)) {
-                const features = getLevelFeatures(newLevel);
-                toast.success(`¡Nivel desbloqueado!`, {
-                  description: `Has alcanzado nuevas capacidades. Características desbloqueadas:\n${features.slice(0, 2).join('\n')}`
-                });
-              }
+            // Check if user leveled up (not down)
+            if (checkLevelUp(previousLevel, newLevel)) {
+              const features = getLevelFeatures(newLevel);
+              toast.success(`¡Nivel desbloqueado!`, {
+                description: `Has alcanzado nuevas capacidades. Características desbloqueadas:\n${features.slice(0, 2).join('\n')}`
+              });
             }
           }
         } else {
-          // User needs to complete onboarding
+          // Profile says onboarding is complete but no active membership found
+          // This happens when user is removed from a home
+          // Force them to go through onboarding again
           setHasCompletedOnboarding(false);
+          toast.info('Has sido removido del hogar. Debes crear uno nuevo o unirte a otro.');
         }
+      } else {
+        // User needs to complete onboarding
+        setHasCompletedOnboarding(false);
       }
 
       setIsLoading(false);
@@ -156,6 +239,32 @@ export default function App() {
       toast.error("Error al cerrar sesión");
     }
   }
+
+  const handleConfirmChangeHome = async () => {
+    if (!changeHomeData || !currentUser) return;
+
+    setIsChangingHome(true);
+    try {
+      await db.acceptInvitation(changeHomeData.token, currentUser.id);
+      toast.success('¡Te has cambiado de casa exitosamente!');
+      setInvitationToken(null);
+      setShowChangeHomeDialog(false);
+      setChangeHomeData(null);
+      await loadUserData(currentUser.id);
+    } catch (error: any) {
+      console.error('Error changing home:', error);
+      toast.error(error.message || 'Error al cambiar de casa');
+    } finally {
+      setIsChangingHome(false);
+    }
+  };
+
+  const handleCancelChangeHome = () => {
+    setShowChangeHomeDialog(false);
+    setChangeHomeData(null);
+    setInvitationToken(null);
+    toast.info('Has permanecido en tu casa actual');
+  };
 
   async function handleOnboardingComplete() {
     // Reload user data so we read the newly created home/tasks from backend
@@ -181,7 +290,10 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <AuthView onSuccess={() => setIsAuthenticated(true)} />
+        <AuthView 
+          onSuccess={() => setIsAuthenticated(true)} 
+          invitationToken={invitationToken}
+        />
         <Toaster />
       </>
     );
@@ -370,6 +482,7 @@ export default function App() {
         open={profileSettingsOpen}
         onOpenChange={setProfileSettingsOpen}
         currentMember={currentMember}
+        currentHome={currentHome}
         onUpdate={() => {
           if (currentUser?.id) loadUserData(currentUser.id);
         }}
@@ -396,6 +509,19 @@ export default function App() {
           if (currentUser?.id) loadUserData(currentUser.id);
         }}
       />
+
+      {/* Change Home Confirmation Dialog */}
+      {changeHomeData && (
+        <ChangeHomeConfirmDialog
+          open={showChangeHomeDialog}
+          onOpenChange={setShowChangeHomeDialog}
+          currentHomeName={changeHomeData.currentHomeName}
+          newHomeName={changeHomeData.newHomeName}
+          onConfirm={handleConfirmChangeHome}
+          onCancel={handleCancelChangeHome}
+          isLoading={isChangingHome}
+        />
+      )}
 
       <Toaster />
     </>
