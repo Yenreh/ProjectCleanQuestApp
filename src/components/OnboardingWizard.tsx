@@ -7,7 +7,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
-import { Home, Users, ListTodo, Sparkles, CheckCircle2, Clock, Mail, Link2, Trash2, UtensilsCrossed, Droplet, BedDouble, X } from "lucide-react";
+import { Home, Users, ListTodo, Sparkles, CheckCircle2, Clock, Mail, Link2, Trash2, UtensilsCrossed, Droplet, BedDouble, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "../lib/db";
 
@@ -63,6 +63,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
   // Step D: First task
   const [firstTaskProgress, setFirstTaskProgress] = useState(0);
+
+  // Loading states
+  const [isCreatingTasks, setIsCreatingTasks] = useState(false);
 
   // Load zone presets from database
   useEffect(() => {
@@ -189,10 +192,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       return;
     }
 
+    setIsCreatingTasks(true);
+
     (async () => {
       try {
         if (!createdHomeId) {
           toast.error('Primero crea la casa para poder agregar tareas');
+          setIsCreatingTasks(false);
           return;
         }
 
@@ -255,6 +261,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       } catch (error) {
         console.error('Error creando tareas:', error);
         toast.error('Error al guardar tareas. Intenta de nuevo.');
+      } finally {
+        setIsCreatingTasks(false);
       }
     })();
   };
@@ -614,8 +622,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               <Button
                 onClick={handleCompleteTasks}
                 className="w-full bg-[#d4a574] hover:bg-[#c49565]"
+                disabled={isCreatingTasks}
               >
-                Agregar tareas ({selectedTasks.length})
+                {isCreatingTasks ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creando tareas...
+                  </>
+                ) : (
+                  `Agregar tareas (${selectedTasks.length})`
+                )}
               </Button>
             </div>
           </Card>
