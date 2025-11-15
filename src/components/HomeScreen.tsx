@@ -178,6 +178,18 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     try {
       await db.completeTask(currentTaskDialog.id, currentMember.id);
       toast.success('¡Tarea completada!');
+      
+      // Check for unlocked achievements
+      const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
+      if (unlockedAchievements.length > 0) {
+        setTimeout(() => {
+          toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
+            description: unlockedAchievements[0].description,
+            duration: 5000,
+          });
+        }, 1000);
+      }
+      
       setTaskDialogOpen(false);
       setCurrentTaskDialog(null);
       setCompletedStepsInDialog(new Set());
@@ -194,6 +206,18 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     try {
       await db.completeTask(assignmentId, currentMember.id);
       toast.success('¡Tarea completada!');
+      
+      // Check for unlocked achievements
+      const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
+      if (unlockedAchievements.length > 0) {
+        setTimeout(() => {
+          toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
+            description: unlockedAchievements[0].description,
+            duration: 5000,
+          });
+        }, 1000);
+      }
+      
       await loadData();
     } catch (error) {
       console.error('Error completing task:', error);

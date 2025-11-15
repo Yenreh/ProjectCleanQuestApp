@@ -3,6 +3,7 @@
 
 -- ========== ACHIEVEMENTS (Insignias) ==========
 INSERT INTO achievements (name, title, description, icon, color, achievement_type, requirement_type, requirement_value) VALUES
+  ('onboarding_complete', 'Primer Paso', 'Completaste la configuración inicial de tu hogar', 'check-circle', '#6fbd9d', 'individual', 'onboarding', 1),
   ('first_week', 'Primera Semana', 'Completaste tu primera semana en CleanQuest', 'check-circle', '#6fbd9d', 'individual', 'weeks_active', 1),
   ('team_player', 'Jugador de Equipo', 'Colaboraste con tu equipo', 'users', '#89a7c4', 'individual', 'collaborations', 5),
   ('clean_streak', 'Racha Limpia', 'Completaste tareas 7 días seguidos', 'sparkles', '#d4a574', 'individual', 'streak_days', 7),

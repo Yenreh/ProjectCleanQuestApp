@@ -942,6 +942,10 @@ export const db = {
       
       // Check requirements based on type
       switch (achievement.requirement_type) {
+        case 'onboarding':
+          // Always unlock if user exists (onboarding complete)
+          shouldUnlock = true
+          break
         case 'weeks_active':
           shouldUnlock = member.weeks_active >= achievement.requirement_value
           break

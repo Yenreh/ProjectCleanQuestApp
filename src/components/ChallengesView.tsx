@@ -5,11 +5,12 @@ import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { Clock, Trophy, Users, Sparkles, Home, UtensilsCrossed, Lightbulb, ThumbsUp, ThumbsDown, TrendingUp, Loader2 } from "lucide-react";
+import { Clock, Trophy, Users, Sparkles, Home, UtensilsCrossed, Lightbulb, ThumbsUp, ThumbsDown, TrendingUp, Loader2, Target, BarChart3, Award } from "lucide-react";
 import { Progress } from "./ui/progress";
+import { AchievementsSection } from "./AchievementsSection";
 import { db } from "../lib/db";
 import { toast } from "sonner";
-import type { ChallengeWithParticipants, ProposalWithAuthor, HomeMember } from "../lib/types";
+import type { ChallengeWithParticipants, ProposalWithAuthor, HomeMember, Achievement, HomeMetrics } from "../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -23,6 +24,8 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   const [isLoading, setIsLoading] = useState(true);
   const [challenges, setChallenges] = useState<ChallengeWithParticipants[]>([]);
   const [proposals, setProposals] = useState<ProposalWithAuthor[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [proposalTitle, setProposalTitle] = useState("");
   const [hypothesis, setHypothesis] = useState("");
 
@@ -33,17 +36,21 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   }, [currentMember, homeId]);
 
   const loadData = async () => {
-    if (!homeId) return;
+    if (!homeId || !currentMember) return;
     
     setIsLoading(true);
     try {
-      const [homeChallenges, homeProposals] = await Promise.all([
+      const [homeChallenges, homeProposals, memberAchievements, homeMetrics] = await Promise.all([
         db.getChallenges(homeId, true),
-        db.getProposals(homeId, 'pending')
+        db.getProposals(homeId, 'pending'),
+        db.getMemberAchievements(currentMember.id),
+        db.getHomeMetrics(homeId)
       ]);
       
       setChallenges(homeChallenges);
       setProposals(homeProposals);
+      setAchievements(memberAchievements);
+      setMetrics(homeMetrics);
     } catch (error) {
       console.error('Error loading challenges:', error);
       toast.error('Error al cargar desafíos');
@@ -318,6 +325,30 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
         </Tabs>
       )}
 
+      {/* SOLVER+: Challenge Stats */}
+      {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master") && (
+        <Card className="p-4 mb-6 bg-white">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-[#89a7c4]" />
+            <h4>Rendimiento en desafíos</h4>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center p-3 bg-[#e9f5f0] rounded-lg">
+              <p className="text-2xl text-[#6fbd9d]" style={{ fontWeight: 600 }}>{collaborationsThisWeek}</p>
+              <p className="text-xs text-muted-foreground mt-1">Completados</p>
+            </div>
+            <div className="text-center p-3 bg-[#fef3e0] rounded-lg">
+              <p className="text-2xl text-[#d4a574]" style={{ fontWeight: 600 }}>85%</p>
+              <p className="text-xs text-muted-foreground mt-1">Tasa éxito</p>
+            </div>
+            <div className="text-center p-3 bg-[#f0f7ff] rounded-lg">
+              <p className="text-2xl text-[#89a7c4]" style={{ fontWeight: 600 }}>320</p>
+              <p className="text-xs text-muted-foreground mt-1">Puntos ganados</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* EXPERT+: Strategic Challenges */}
       {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
         <Card className="p-4 mb-6 bg-[#f0f7ff]">
@@ -347,10 +378,55 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
         <Card className="p-4 mb-6 bg-[#fef3e0]">
           <h4 className="mb-3">Meta grupal de la semana</h4>
           <p className="text-sm mb-3">Alcanzar 80% de completitud con rotación equitativa</p>
-          <Progress value={78} className="h-2 mb-2" />
+          <Progress value={metrics?.completion_percentage || 78} className="h-2 mb-2" />
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Progreso actual</span>
-            <span className="text-[#6fbd9d]">78%</span>
+            <span className="text-[#6fbd9d]">{metrics?.completion_percentage || 78}%</span>
+          </div>
+        </Card>
+      )}
+
+      {/* Achievements Section - visible for all levels */}
+      <div className="mb-6">
+        <AchievementsSection achievements={achievements} showAll={masteryLevel === "master" || masteryLevel === "visionary"} />
+      </div>
+
+      {/* EXPERT+: Upcoming Rewards */}
+      {(masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
+        <Card className="p-4 mb-6 bg-[#f0f7ff]">
+          <div className="flex items-center gap-2 mb-3">
+            <Award className="w-5 h-5 text-[#89a7c4]" />
+            <h4>Próximas insignias</h4>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-muted/30 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm">Racha Limpia</p>
+                  <p className="text-xs text-muted-foreground">7 días seguidos</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {currentMember?.current_streak || 0}/7
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-muted/30 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm">Círculo de Equidad</p>
+                  <p className="text-xs text-muted-foreground">Equidad en 1 semana</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                Próximamente
+              </Badge>
+            </div>
           </div>
         </Card>
       )}

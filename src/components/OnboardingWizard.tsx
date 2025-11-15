@@ -275,12 +275,30 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       setFirstTaskProgress(100);
       toast.success("¡Tarea completada! 🌟");
       
-      // Mark onboarding as complete
+      // Mark onboarding as complete and unlock first achievement
       (async () => {
         try {
           const user = await db.getCurrentUser();
           if (user) {
             await db.markOnboardingComplete(user.id);
+            
+            // Unlock "onboarding_complete" achievement
+            if (createdHomeId) {
+              const members = await db.getHomeMembers(createdHomeId);
+              const currentMember = members.find(m => m.user_id === user.id);
+              if (currentMember) {
+                const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
+                if (unlockedAchievements.length > 0) {
+                  // Show achievement notification
+                  setTimeout(() => {
+                    toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
+                      description: unlockedAchievements[0].description,
+                      duration: 5000,
+                    });
+                  }, 2000);
+                }
+              }
+            }
           }
           
           setTimeout(() => {
