@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
@@ -128,6 +129,14 @@ export function StatisticsDialog({ open, onOpenChange, metrics, members, home }:
             </Card>
           )}
         </div>
+
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          className="w-full mt-4"
+        >
+          Cerrar
+        </Button>
       </DialogContent>
     </Dialog>
   );

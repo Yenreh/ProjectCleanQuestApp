@@ -41,7 +41,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
     try {
       const [homeChallenges, homeProposals, memberAchievements] = await Promise.all([
         db.getChallenges(homeId, true),
-        db.getProposals(homeId, 'pending'),
+        db.getProposals(homeId, 'voting'),
         db.getMemberAchievements(currentMember.id),
       ]);
       
@@ -91,7 +91,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
       await db.createProposal(homeId, currentMember.id, {
         title: proposalTitle,
         hypothesis: hypothesis,
-        status: 'pending',
+        status: 'voting',
         votes_yes: 0,
         votes_no: 0
       });
@@ -310,7 +310,55 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
           </TabsContent>
 
           <TabsContent value="challenges" className="space-y-4">
-            {challenges.map(renderChallenge)}
+            <Tabs defaultValue="all" className="w-full">
+              <TabsList className="w-full !grid grid-cols-3 mb-4">
+                <TabsTrigger value="all">
+                  <Home className="w-4 h-4" />
+                </TabsTrigger>
+                <TabsTrigger value="group">
+                  <Users className="w-4 h-4" />
+                </TabsTrigger>
+                <TabsTrigger value="personal">
+                  <User className="w-4 h-4" />
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all" className="space-y-4">
+                {challenges.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      No hay desafíos disponibles en este momento
+                    </p>
+                  </div>
+                ) : (
+                  challenges.map(renderChallenge)
+                )}
+              </TabsContent>
+
+              <TabsContent value="group" className="space-y-4">
+                {groupChallenges.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      No hay desafíos grupales disponibles
+                    </p>
+                  </div>
+                ) : (
+                  groupChallenges.map(renderChallenge)
+                )}
+              </TabsContent>
+
+              <TabsContent value="personal" className="space-y-4">
+                {personalChallenges.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      No hay desafíos personales disponibles
+                    </p>
+                  </div>
+                ) : (
+                  personalChallenges.map(renderChallenge)
+                )}
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       )}

@@ -122,6 +122,14 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
             </p>
           </div>
         </div>
+
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          className="w-full mt-4"
+        >
+          Cerrar
+        </Button>
       </DialogContent>
     </Dialog>
   );
