@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { HomeScreen } from "./components/HomeScreen";
-import { ProgressPanel } from "./components/ProgressPanel";
-import { ChallengesView } from "./components/ChallengesView";
-import { HarmonyRoom } from "./components/HarmonyRoom";
-import { OnboardingWizard } from "./components/OnboardingWizard";
-import { AuthScreen } from "./components/AuthScreen";
+import { HomeView } from "./components/panels/HomeView";
+import { ProgressView } from "./components/panels/ProgressView";
+import { ChallengesView } from "./components/panels/ChallengesView";
+import { HarmonyView } from "./components/panels/HarmonyView";
+import { OnboardingView } from "./components/panels/OnboardingView";
+import { AuthView } from "./components/panels/AuthView";
+import { ProfileSettingsDialog } from "./components/dialogs/ProfileSettingsDialog";
+import { HomeManagementDialog } from "./components/dialogs/HomeManagementDialog";
+import { GeneralSettingsDialog } from "./components/dialogs/GeneralSettingsDialog";
 import { Home, BarChart3, Trophy, Sparkles, Settings, User, Users, ListTodo, HomeIcon, Clock, ChevronDown, LogOut } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
@@ -17,9 +20,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "./components/ui/dropdown-menu";
 import { db } from "./lib/db";
 import { calculateMasteryLevel, checkLevelUp, getLevelFeatures } from "./lib/masteryService";
@@ -39,6 +39,11 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [currentHome, setCurrentHome] = useState<HomeType | null>(null);
   const [currentMember, setCurrentMember] = useState<HomeMember | null>(null);
+  
+  // Settings modals state
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const [homeManagementOpen, setHomeManagementOpen] = useState(false);
+  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
   
   // Información del usuario
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
@@ -176,7 +181,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <AuthScreen onSuccess={() => setIsAuthenticated(true)} />
+        <AuthView onSuccess={() => setIsAuthenticated(true)} />
         <Toaster />
       </>
     );
@@ -186,7 +191,7 @@ export default function App() {
   if (!hasCompletedOnboarding) {
     return (
       <>
-        <OnboardingWizard onComplete={handleOnboardingComplete} />
+        <OnboardingView onComplete={handleOnboardingComplete} />
         <Toaster />
       </>
     );
@@ -195,15 +200,15 @@ export default function App() {
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
-        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
+        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
       case "progress":
-        return <ProgressPanel masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
+        return <ProgressView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "challenges":
         return <ChallengesView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "harmony":
-        return <HarmonyRoom masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
+        return <HarmonyView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       default:
-        return <HomeScreen masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
+        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
     }
   };
 
@@ -242,41 +247,22 @@ export default function App() {
                 <DropdownMenuSeparator />
                 
                 {/* Mi Perfil */}
-                <DropdownMenuItem onClick={() => toast.info("Funcionalidad de perfil próximamente")}>
+                <DropdownMenuItem onClick={() => setProfileSettingsOpen(true)}>
                   <User className="w-4 h-4 mr-2" />
                   <span>Mi perfil</span>
                 </DropdownMenuItem>
 
                 {/* Administrar Casa - with submenu */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <HomeIcon className="w-4 h-4 mr-2" />
-                    <span>Administrar casa</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar tareas próximamente")}>
-                      <ListTodo className="w-4 h-4 mr-2" />
-                      <span>Gestionar tareas</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar zonas próximamente")}>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      <span>Gestionar zonas</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Gestionar miembros próximamente")}>
-                      <Users className="w-4 h-4 mr-2" />
-                      <span>Gestionar miembros</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toast.info("Configurar recordatorios próximamente")}>
-                      <Clock className="w-4 h-4 mr-2" />
-                      <span>Recordatorios</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                {/* Gestión del hogar */}
+                <DropdownMenuItem onClick={() => setHomeManagementOpen(true)}>
+                  <HomeIcon className="w-4 h-4 mr-2" />
+                  <span>Gestionar hogar</span>
+                </DropdownMenuItem>
 
                 <DropdownMenuSeparator />
                 
                 {/* Configuración general */}
-                <DropdownMenuItem onClick={() => toast.info("Configuración general próximamente")}>
+                <DropdownMenuItem onClick={() => setGeneralSettingsOpen(true)}>
                   <Settings className="w-4 h-4 mr-2" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
@@ -378,6 +364,39 @@ export default function App() {
           </div>
         </nav>
       </div>
+
+      {/* Profile Settings Dialog */}
+      <ProfileSettingsDialog
+        open={profileSettingsOpen}
+        onOpenChange={setProfileSettingsOpen}
+        currentMember={currentMember}
+        onUpdate={() => {
+          if (currentUser?.id) loadUserData(currentUser.id);
+        }}
+      />
+
+      {/* Home Management Dialog */}
+      <HomeManagementDialog
+        open={homeManagementOpen}
+        onOpenChange={setHomeManagementOpen}
+        homeId={currentHome?.id || null}
+        currentMember={currentMember}
+        currentHome={currentHome}
+        onUpdate={() => {
+          if (currentUser?.id) loadUserData(currentUser.id);
+        }}
+      />
+
+      {/* General Settings Dialog */}
+      <GeneralSettingsDialog
+        open={generalSettingsOpen}
+        onOpenChange={setGeneralSettingsOpen}
+        currentMember={currentMember}
+        onUpdate={() => {
+          if (currentUser?.id) loadUserData(currentUser.id);
+        }}
+      />
+
       <Toaster />
     </>
   );

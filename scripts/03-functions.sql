@@ -1,6 +1,6 @@
 -- Funciones SQL básicas para CleanQuest
 -- Ejecutar después de 01-create-tables.sql
--- NOTA: La lógica de negocio se maneja en la aplicación, no en la DB
+-- NOTA: La lógica de negocio se maneja en la aplicación (db.ts), no en la DB
 
 -- Trigger para crear perfil automáticamente al registrarse
 CREATE OR REPLACE FUNCTION handle_new_user() 
@@ -28,4 +28,3 @@ BEGIN
   END IF;
 END;
 $$;
-

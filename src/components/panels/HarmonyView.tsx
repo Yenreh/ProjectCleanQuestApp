@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import { Card } from "./ui/card";
-import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Switch } from "./ui/switch";
-import { Trophy, Users, Home, Sparkles, CheckCircle2, BarChart3, Calendar, FileText, Settings, Target, Clock, Loader2 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { db } from "../lib/db";
+import { Card } from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Switch } from "../ui/switch";
+import { Sparkles, Heart, Home as HomeIcon, TrendingUp, Users, CheckCircle2, Star, AlertTriangle, Lightbulb, Target, Home, Loader2, Trophy, Calendar, Clock, FileText, Settings, BarChart3 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { db } from "../../lib/db";
 import { toast } from "sonner";
-import type { Zone, Achievement, HomeMember, HomeMetrics } from "../lib/types";
+import type { Zone, Achievement, HomeMember, HomeMetrics } from "../../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -20,7 +20,7 @@ interface HarmonyRoomProps {
   homeId?: number | null;
 }
 
-export function HarmonyRoom({ masteryLevel, currentMember, homeId }: HarmonyRoomProps) {
+export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoomProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [zones, setZones] = useState<Zone[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);

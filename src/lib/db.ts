@@ -23,7 +23,9 @@ import type {
   TaskStep,
   AssignmentWithDetails,
   ChallengeWithParticipants,
-  ProposalWithAuthor
+  ProposalWithAuthor,
+  TaskCancellation,
+  CancelledTaskWithDetails
 } from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -252,6 +254,31 @@ export const db = {
     return data
   },
 
+  async updateZone(zoneId: number, updates: Partial<CreateZoneInput>) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data, error } = await supabase
+      .from('zones')
+      .update(updates)
+      .eq('id', zoneId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  async deleteZone(zoneId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { error } = await supabase
+      .from('zones')
+      .delete()
+      .eq('id', zoneId)
+    
+    if (error) throw error
+  },
+
   // ========== MEMBERS ==========
 
   async inviteMember(homeId: number, invitation: InviteMemberInput) {
@@ -330,6 +357,17 @@ export const db = {
       throw error
     }
     return data
+  },
+
+  async removeMember(memberId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { error } = await supabase
+      .from('home_members')
+      .delete()
+      .eq('id', memberId)
+    
+    if (error) throw error
   },
 
   // ========== TASKS ==========
@@ -424,6 +462,17 @@ export const db = {
     return data
   },
 
+  async deleteTask(taskId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+    
+    if (error) throw error
+  },
+
   // ========== TASK TEMPLATES ==========
 
   async createTaskTemplate(templateData: CreateTaskTemplateInput) {
@@ -506,6 +555,17 @@ export const db = {
 
     if (error) throw error
     return data
+  },
+
+  async deleteTaskSteps(taskId: number): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { error } = await supabase
+      .from('task_steps')
+      .delete()
+      .eq('task_id', taskId)
+    
+    if (error) throw error
   },
 
   async completeTaskStep(stepId: number, assignmentId: number, memberId: number) {
@@ -646,24 +706,387 @@ export const db = {
       .update({ status: 'completed' })
       .eq('id', assignmentId)
     
-    // Update member points directly (no stored procedure)
+    // Update member stats (includes streak calculation)
+    await this.updateMemberStats(memberId, pointsEarned)
+    
+    // Update mastery level if needed
+    await this.updateMasteryLevel(memberId)
+    
+    // Note: Don't check achievements here - let the UI call checkAndUnlockAchievements
+    // so it can show the notification. We just update the stats.
+    
+    return completion
+  },
+
+  async updateMemberStats(memberId: number, pointsEarned: number = 0) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
     const { data: member } = await supabase
       .from('home_members')
-      .select('total_points, tasks_completed')
+      .select('total_points, tasks_completed, current_streak')
       .eq('id', memberId)
       .single()
     
-    if (member) {
-      await supabase
-        .from('home_members')
-        .update({ 
-          total_points: (member.total_points || 0) + pointsEarned,
-          tasks_completed: (member.tasks_completed || 0) + 1
-        })
-        .eq('id', memberId)
+    if (!member) return
+    
+    // Calculate new streak
+    // Check if user completed a task yesterday or today
+    const { data: recentCompletions } = await supabase
+      .from('task_completions')
+      .select('completed_at')
+      .eq('member_id', memberId)
+      .order('completed_at', { ascending: false })
+      .limit(10)
+    
+    let newStreak = 1
+    if (recentCompletions && recentCompletions.length > 1) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      
+      // Check if there was a completion yesterday
+      const hadYesterday = recentCompletions.some(c => {
+        const completedDate = new Date(c.completed_at)
+        completedDate.setHours(0, 0, 0, 0)
+        return completedDate.getTime() === yesterday.getTime()
+      })
+      
+      if (hadYesterday) {
+        newStreak = (member.current_streak || 0) + 1
+      }
     }
     
-    return completion
+    // Update member
+    await supabase
+      .from('home_members')
+      .update({ 
+        total_points: (member.total_points || 0) + pointsEarned,
+        tasks_completed: (member.tasks_completed || 0) + 1,
+        current_streak: newStreak
+      })
+      .eq('id', memberId)
+  },
+
+  // ========== TASK CANCELLATION ==========
+  
+  async cancelTask(assignmentId: number, memberId: number, reason: string) {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      // Verificar que la asignación existe y pertenece al miembro
+      const { data: assignment, error: fetchError } = await supabase
+        .from('task_assignments')
+        .select('*')
+        .eq('id', assignmentId)
+        .eq('member_id', memberId)
+        .eq('status', 'pending')
+        .single();
+
+      if (fetchError || !assignment) {
+        throw new Error('Assignment not found or not pending');
+      }
+
+      // Actualizar estado de la asignación a 'skipped'
+      const { error: updateError } = await supabase
+        .from('task_assignments')
+        .update({ status: 'skipped' })
+        .eq('id', assignmentId);
+
+      if (updateError) throw updateError;
+
+      // Registrar la cancelación
+      const { error: insertError } = await supabase
+        .from('task_cancellations')
+        .upsert({
+          assignment_id: assignmentId,
+          cancelled_by: memberId,
+          reason: reason,
+          is_available: true,
+          cancelled_at: new Date().toISOString(),
+          taken_by: null,
+          taken_at: null
+        }, {
+          onConflict: 'assignment_id'
+        });
+
+      if (insertError) throw insertError;
+
+      return true;
+    } catch (error) {
+      console.error('Error canceling task:', error);
+      throw error;
+    }
+  },
+
+  async getAvailableCancelledTasks(homeId: number) {
+    if (!supabase) return [];
+
+    try {
+      // Obtener tareas canceladas y disponibles
+      const { data: cancelledData, error: cancelledError } = await supabase
+        .from('task_cancellations')
+        .select(`
+          id,
+          assignment_id,
+          cancelled_by,
+          reason,
+          cancelled_at,
+          task_assignments!inner (
+            id,
+            assigned_date,
+            due_date,
+            tasks!inner (
+              id,
+              title,
+              icon,
+              effort_points,
+              home_id,
+              zones (
+                name
+              )
+            )
+          ),
+          home_members!task_cancellations_cancelled_by_fkey (
+            id,
+            email,
+            user_id,
+            profiles (
+              full_name
+            )
+          )
+        `)
+        .eq('is_available', true)
+        .eq('task_assignments.tasks.home_id', homeId)
+        .eq('task_assignments.status', 'skipped')
+        .order('cancelled_at', { ascending: false });
+
+      if (cancelledError) throw cancelledError;
+
+      // Obtener tareas activas sin asignaciones
+      const { data: unassignedData, error: unassignedError } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          title,
+          icon,
+          effort_points,
+          zones (
+            name
+          )
+        `)
+        .eq('home_id', homeId)
+        .eq('is_active', true);
+
+      if (unassignedError) throw unassignedError;
+
+      // Obtener IDs de tareas que ya tienen asignaciones
+      const { data: assignedTaskIds, error: assignedError } = await supabase
+        .from('task_assignments')
+        .select('task_id')
+        .eq('status', 'pending');
+
+      if (assignedError) throw assignedError;
+
+      const assignedIds = new Set((assignedTaskIds || []).map((a: any) => a.task_id));
+
+      // Filtrar tareas sin asignaciones pendientes
+      const unassignedTasks = (unassignedData || [])
+        .filter((task: any) => !assignedIds.has(task.id))
+        .map((task: any) => ({
+          cancellation_id: 0, // No es una cancelación
+          assignment_id: 0,
+          task_id: task.id,
+          task_title: task.title,
+          task_icon: task.icon,
+          task_effort: task.effort_points,
+          zone_name: task.zones?.name || 'Sin zona',
+          cancelled_by_id: 0,
+          cancelled_by_name: 'Sistema',
+          cancellation_reason: 'Tarea nueva sin asignar',
+          cancelled_at: new Date().toISOString(),
+          assigned_date: new Date().toISOString(),
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días desde ahora
+        }));
+
+      // Transformar tareas canceladas
+      const cancelledTasks = (cancelledData || []).map((item: any) => ({
+        cancellation_id: item.id,
+        assignment_id: item.assignment_id,
+        task_id: item.task_assignments.tasks.id,
+        task_title: item.task_assignments.tasks.title,
+        task_icon: item.task_assignments.tasks.icon,
+        task_effort: item.task_assignments.tasks.effort_points,
+        zone_name: item.task_assignments.tasks.zones?.name || 'Sin zona',
+        cancelled_by_id: item.home_members.id,
+        cancelled_by_name: item.home_members.profiles?.full_name || item.home_members.email,
+        cancellation_reason: item.reason,
+        cancelled_at: item.cancelled_at,
+        assigned_date: item.task_assignments.assigned_date,
+        due_date: item.task_assignments.due_date
+      }));
+
+      // Combinar ambas listas
+      return [...unassignedTasks, ...cancelledTasks];
+    } catch (error) {
+      console.error('Error loading available tasks:', error);
+      return [];
+    }
+  },
+
+  async takeCancelledTask(cancellationId: number, newMemberId: number, taskId?: number) {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      // Caso 1: Tarea sin asignar (cancellationId === 0)
+      if (cancellationId === 0 && taskId) {
+        // Verificar que la tarea existe y está activa
+        const { data: task, error: taskError } = await supabase
+          .from('tasks')
+          .select('id, home_id')
+          .eq('id', taskId)
+          .eq('is_active', true)
+          .single();
+
+        if (taskError || !task) {
+          throw new Error('Task not found or not active');
+        }
+
+        // Verificar que el miembro pertenece al hogar
+        const { data: member, error: memberError } = await supabase
+          .from('home_members')
+          .select('id')
+          .eq('id', newMemberId)
+          .eq('home_id', task.home_id)
+          .eq('status', 'active')
+          .single();
+
+        if (memberError || !member) {
+          throw new Error('Member not found or not active in home');
+        }
+
+        const assignedDate = new Date().toISOString().split('T')[0];
+
+        // Verificar si ya existe una asignación para esta tarea, miembro y fecha
+        const { data: existingAssignment } = await supabase
+          .from('task_assignments')
+          .select('id')
+          .eq('task_id', taskId)
+          .eq('member_id', newMemberId)
+          .eq('assigned_date', assignedDate)
+          .maybeSingle();
+
+        if (existingAssignment) {
+          throw new Error('Ya tienes esta tarea asignada para hoy');
+        }
+
+        // Crear nueva asignación
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 7); // 7 días desde ahora
+
+        const { error: insertError } = await supabase
+          .from('task_assignments')
+          .insert({
+            task_id: taskId,
+            member_id: newMemberId,
+            assigned_date: assignedDate,
+            due_date: dueDate.toISOString().split('T')[0],
+            status: 'pending'
+          });
+
+        if (insertError) throw insertError;
+
+        return true;
+      }
+
+      // Caso 2: Tarea cancelada (cancellationId > 0)
+      // Obtener información de la cancelación
+      const { data: cancellation, error: fetchError } = await supabase
+        .from('task_cancellations')
+        .select(`
+          id,
+          assignment_id,
+          is_available,
+          task_assignments!inner (
+            task_id,
+            due_date,
+            tasks!inner (
+              home_id
+            )
+          )
+        `)
+        .eq('id', cancellationId)
+        .eq('is_available', true)
+        .single();
+
+      if (fetchError || !cancellation) {
+        throw new Error('Cancellation not found or already taken');
+      }
+
+      const assignment = cancellation.task_assignments as any;
+      const homeId = assignment.tasks.home_id;
+      const cancelledTaskId = assignment.task_id;
+      const dueDate = assignment.due_date;
+
+      // Verificar que el nuevo miembro pertenece al hogar
+      const { data: member, error: memberError } = await supabase
+        .from('home_members')
+        .select('id')
+        .eq('id', newMemberId)
+        .eq('home_id', homeId)
+        .eq('status', 'active')
+        .single();
+
+      if (memberError || !member) {
+        throw new Error('Member not found or not active in home');
+      }
+
+      const assignedDate = new Date().toISOString().split('T')[0];
+
+      // Verificar si ya existe una asignación para esta tarea, miembro y fecha
+      const { data: existingAssignment } = await supabase
+        .from('task_assignments')
+        .select('id')
+        .eq('task_id', cancelledTaskId)
+        .eq('member_id', newMemberId)
+        .eq('assigned_date', assignedDate)
+        .maybeSingle();
+
+      if (existingAssignment) {
+        throw new Error('Ya tienes esta tarea asignada para hoy');
+      }
+
+      // Marcar la cancelación como tomada
+      const { error: updateError } = await supabase
+        .from('task_cancellations')
+        .update({
+          is_available: false,
+          taken_by: newMemberId,
+          taken_at: new Date().toISOString()
+        })
+        .eq('id', cancellationId);
+
+      if (updateError) throw updateError;
+
+      // Crear nueva asignación para el nuevo miembro
+      const { error: insertError } = await supabase
+        .from('task_assignments')
+        .insert({
+          task_id: cancelledTaskId,
+          member_id: newMemberId,
+          assigned_date: assignedDate,
+          due_date: dueDate,
+          status: 'pending'
+        });
+
+      if (insertError) throw insertError;
+
+      return true;
+    } catch (error) {
+      console.error('Error taking task:', error);
+      throw error;
+    }
   },
 
   async createTaskAssignment(taskId: number, memberId: number, assignedDate?: Date, dueDate?: Date) {
@@ -911,7 +1334,7 @@ export const db = {
     // Get member stats
     const { data: member } = await supabase
       .from('home_members')
-      .select('*')
+      .select('*, home_id')
       .eq('id', memberId)
       .single()
     
@@ -946,34 +1369,148 @@ export const db = {
           // Always unlock if user exists (onboarding complete)
           shouldUnlock = true
           break
+          
         case 'weeks_active':
-          shouldUnlock = member.weeks_active >= achievement.requirement_value
+          shouldUnlock = member.weeks_active >= (achievement.requirement_value || 1)
           break
+          
         case 'streak_days':
-          shouldUnlock = member.current_streak >= achievement.requirement_value
+          shouldUnlock = member.current_streak >= (achievement.requirement_value || 7)
           break
+          
         case 'level_reached':
           const levelOrder = ['novice', 'solver', 'expert', 'master', 'visionary']
           const currentLevelIndex = levelOrder.indexOf(member.mastery_level)
-          shouldUnlock = currentLevelIndex + 1 >= achievement.requirement_value
+          shouldUnlock = currentLevelIndex >= ((achievement.requirement_value || 1) - 1)
           break
-        // Add more cases as needed
+          
+        case 'collaborations':
+          // Count completed tasks as collaborations
+          shouldUnlock = member.tasks_completed >= (achievement.requirement_value || 5)
+          break
+          
+        case 'equity_weeks':
+          // Check if home has equitable rotation
+          if (member.home_id) {
+            const metrics = await this.getHomeMetrics(member.home_id)
+            // If rotation percentage is low (good equity), unlock
+            shouldUnlock = metrics.rotation_percentage <= 33
+          }
+          break
+          
+        case 'consecutive_weeks_80':
+          // This would need weekly tracking - for now, check if home is performing well
+          if (member.home_id) {
+            const metrics = await this.getHomeMetrics(member.home_id)
+            shouldUnlock = metrics.completion_percentage >= 80 && metrics.consecutive_weeks >= (achievement.requirement_value || 4)
+          }
+          break
+          
+        case 'master_level':
+          // Unlock if home has excellent metrics
+          if (member.home_id) {
+            const metrics = await this.getHomeMetrics(member.home_id)
+            shouldUnlock = metrics.completion_percentage >= 85 && metrics.rotation_percentage <= 25
+          }
+          break
       }
       
       if (shouldUnlock) {
         // Unlock achievement
-        await supabase
+        const { error: insertError } = await supabase
           .from('member_achievements')
           .insert({
             member_id: memberId,
             achievement_id: achievement.id
           })
         
-        newlyUnlocked.push(achievement)
+        if (!insertError) {
+          newlyUnlocked.push(achievement)
+        }
       }
     }
     
     return newlyUnlocked
+  },
+
+  async updateMasteryLevel(memberId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data: member } = await supabase
+      .from('home_members')
+      .select('*')
+      .eq('id', memberId)
+      .single()
+    
+    if (!member) return null
+    
+    // Determine mastery level based on stats
+    let newLevel = member.mastery_level
+    
+    // Calculate a "mastery score" based on different factors
+    const tasksScore = member.tasks_completed || 0
+    const weeksScore = (member.weeks_active || 0) * 3 // Weeks are more valuable
+    const streakScore = Math.min((member.current_streak || 0) * 0.5, 10) // Max 10 points from streak
+    const totalScore = tasksScore + weeksScore + streakScore
+    
+    // Level progression with hybrid requirements:
+    // NOVICE -> SOLVER: Early game (3-7 days)
+    //   - 3+ tasks OR 1+ week active OR score >= 8
+    // SOLVER -> EXPERT: Mid-early game (1-2 weeks)
+    //   - 12+ tasks OR 2+ weeks active OR score >= 20
+    // EXPERT -> MASTER: Mid-late game (3-4 weeks)
+    //   - 30+ tasks OR 3+ weeks active OR score >= 40
+    // MASTER -> VISIONARY: End game (5+ weeks)
+    //   - 60+ tasks OR 5+ weeks active OR score >= 70
+    
+    if (totalScore >= 70 || member.tasks_completed >= 60 || member.weeks_active >= 5) {
+      newLevel = 'visionary'
+    } else if (totalScore >= 40 || member.tasks_completed >= 30 || member.weeks_active >= 3) {
+      newLevel = 'master'
+    } else if (totalScore >= 20 || member.tasks_completed >= 12 || member.weeks_active >= 2) {
+      newLevel = 'expert'
+    } else if (totalScore >= 8 || member.tasks_completed >= 3 || member.weeks_active >= 1) {
+      newLevel = 'solver'
+    } else {
+      newLevel = 'novice'
+    }
+    
+    // Only update if level changed
+    if (newLevel !== member.mastery_level) {
+      await supabase
+        .from('home_members')
+        .update({ mastery_level: newLevel })
+        .eq('id', memberId)
+      
+      return newLevel
+    }
+    
+    return null
+  },
+
+  async updateWeeksActive(memberId: number) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data: member } = await supabase
+      .from('home_members')
+      .select('joined_at, weeks_active')
+      .eq('id', memberId)
+      .single()
+    
+    if (!member || !member.joined_at) return
+    
+    // Calculate weeks since joining
+    const joinedDate = new Date(member.joined_at)
+    const now = new Date()
+    const weeksSinceJoining = Math.floor((now.getTime() - joinedDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
+    
+    // Only update if it's different
+    if (weeksSinceJoining > (member.weeks_active || 0)) {
+      await supabase
+        .from('home_members')
+        .update({ weeks_active: weeksSinceJoining })
+        .eq('id', memberId)
+    }
   },
 
   // ========== PROPOSALS (Visionary) ==========
@@ -1385,6 +1922,90 @@ export const db = {
     } catch (error) {
       console.error('Error loading favorites:', error);
       return [];
+    }
+  },
+
+  // ========== MEMBER PROFILE ==========
+  
+  async updateMemberProfile(memberId: number, fullName: string, email: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      // Update the profile table with full_name
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          full_name: fullName
+        })
+        .eq('id', user.id);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating member profile:', error);
+      throw error;
+    }
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      // First verify current password by attempting to sign in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('No user found');
+
+      // Update password
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error changing password:', error);
+      throw error;
+    }
+  },
+
+  async updateMemberPreferences(
+    memberId: number,
+    preferences: {
+      emailNotifications?: boolean;
+      pushNotifications?: boolean;
+      weeklyReports?: boolean;
+      theme?: string;
+      fontSize?: string;
+      reminderEnabled?: boolean;
+      reminderTime?: string;
+      reminderDays?: number[];
+    }
+  ): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      const updateData: any = {};
+      
+      if (preferences.emailNotifications !== undefined) updateData.email_notifications = preferences.emailNotifications;
+      if (preferences.pushNotifications !== undefined) updateData.push_notifications = preferences.pushNotifications;
+      if (preferences.weeklyReports !== undefined) updateData.weekly_reports = preferences.weeklyReports;
+      if (preferences.theme !== undefined) updateData.theme = preferences.theme;
+      if (preferences.fontSize !== undefined) updateData.font_size = preferences.fontSize;
+      if (preferences.reminderEnabled !== undefined) updateData.reminder_enabled = preferences.reminderEnabled;
+      if (preferences.reminderTime !== undefined) updateData.reminder_time = preferences.reminderTime;
+      if (preferences.reminderDays !== undefined) updateData.reminder_days = preferences.reminderDays;
+
+      const { error } = await supabase
+        .from('home_members')
+        .update(updateData)
+        .eq('id', memberId);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating member preferences:', error);
+      throw error;
     }
   }
 }

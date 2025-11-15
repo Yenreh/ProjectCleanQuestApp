@@ -250,6 +250,33 @@ export interface TaskExchangeRequest {
   responded_at?: string
 }
 
+export interface TaskCancellation {
+  id: number
+  assignment_id: number
+  cancelled_by: number
+  reason: string
+  is_available: boolean
+  taken_by?: number
+  cancelled_at: string
+  taken_at?: string
+}
+
+export interface CancelledTaskWithDetails {
+  cancellation_id: number
+  assignment_id: number
+  task_id: number
+  task_title: string
+  task_icon: string
+  task_effort: number
+  zone_name?: string
+  cancelled_by_id: number
+  cancelled_by_name: string
+  cancellation_reason: string
+  cancelled_at: string
+  assigned_date: string
+  due_date: string
+}
+
 // Extended types with joins
 
 export interface TaskWithDetails extends Task {

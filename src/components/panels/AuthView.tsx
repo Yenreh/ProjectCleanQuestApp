@@ -1,17 +1,17 @@
 import { useState } from "react"
-import { Card } from "./ui/card"
-import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
+import { Card } from "../ui/card"
+import { Button } from "../ui/button"
+import { Input } from "../ui/input"
+import { Label } from "../ui/label"
 import { Sparkles, Mail, Lock, User } from "lucide-react"
-import { db } from "../lib/db"
+import { db } from "../../lib/db"
 import { toast } from "sonner"
 
 interface AuthScreenProps {
   onSuccess: () => void
 }
 
-export function AuthScreen({ onSuccess }: AuthScreenProps) {
+export function AuthView({ onSuccess }: AuthScreenProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")

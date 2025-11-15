@@ -74,7 +74,8 @@ const DialogContent = React.forwardRef<
           borderRadius: '0.5rem',
           boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
           maxWidth: '500px',
-          width: '90%'
+          width: '90%',
+          maxHeight: '95%',
         }}
         {...props}
       >

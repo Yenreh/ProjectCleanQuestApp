@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
-import { Button } from "./ui/button";
-import { Card } from "./ui/card";
-import { Progress } from "./ui/progress";
-import { Badge } from "./ui/badge";
-import { Input } from "./ui/input";
-import { CheckCircle2, Trash2, UtensilsCrossed, Sparkles, Circle, Lightbulb, AlertCircle, Calculator, ChevronDown, ChevronUp, TrendingUp, Heart, Loader2, X, ArrowRightLeft } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
-import { db } from "../lib/db";
+import { Button } from "../ui/button";
+import { Card } from "../ui/card";
+import { Progress } from "../ui/progress";
+import { Badge } from "../ui/badge";
+import { CheckCircle2, Circle, XCircle, TrendingUp, Zap, Users, Clock, Trash2, UtensilsCrossed, Sparkles, Loader2, AlertCircle, ClipboardList, Heart, ArrowRightLeft, Ban, Lightbulb } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
+import { CancelTaskDialog } from "../dialogs/CancelTaskDialog";
+import { AvailableTasksDialog } from "../dialogs/AvailableTasksDialog";
+import { CompleteTaskDialog } from "../dialogs/CompleteTaskDialog";
+import { db } from "../../lib/db";
 import { toast } from "sonner";
-import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../lib/types";
+import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -20,18 +21,19 @@ interface HomeScreenProps {
   homeId?: number | null;
 }
 
-export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }: HomeScreenProps) {
+export function HomeView({ masteryLevel, currentMember, currentUser, homeId }: HomeScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
-  const [showCalculation, setShowCalculation] = useState(false);
-  const [quickProposal, setQuickProposal] = useState("");
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [currentTaskDialog, setCurrentTaskDialog] = useState<AssignmentWithDetails | null>(null);
   const [completedStepsInDialog, setCompletedStepsInDialog] = useState<Set<number>>(new Set());
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [taskToSwap, setTaskToSwap] = useState<AssignmentWithDetails | null>(null);
   const [favoriteTasks, setFavoriteTasks] = useState<Set<number>>(new Set());
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [taskToCancel, setTaskToCancel] = useState<AssignmentWithDetails | null>(null);
+  const [availableTasksOpen, setAvailableTasksOpen] = useState(false);
   
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
 
@@ -39,6 +41,10 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
   useEffect(() => {
     if (currentMember && homeId) {
       loadData();
+      // Update weeks active on mount
+      db.updateWeeksActive(currentMember.id).catch(err => 
+        console.error('Error updating weeks active:', err)
+      );
     }
   }, [currentMember, homeId]);
 
@@ -90,7 +96,6 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
   };
 
   const openTaskDialog = async (assignment: AssignmentWithDetails) => {
-    console.log('Opening task dialog for:', assignment.task_title);
     setCurrentTaskDialog(assignment);
     
     // Load completed steps for this assignment
@@ -105,7 +110,6 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
     }
     
     setTaskDialogOpen(true);
-    console.log('Dialog state set to true');
   };
 
   const handleToggleStep = async (stepId: number) => {
@@ -179,6 +183,23 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       await db.completeTask(currentTaskDialog.id, currentMember.id);
       toast.success('¡Tarea completada!');
       
+      // Check for level up
+      const newLevel = await db.updateMasteryLevel(currentMember.id);
+      if (newLevel) {
+        const levelNames = {
+          'solver': 'Solucionador',
+          'expert': 'Experto',
+          'master': 'Maestro',
+          'visionary': 'Visionario'
+        };
+        setTimeout(() => {
+          toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
+            description: 'Ahora tienes acceso a nuevas funciones',
+            duration: 5000,
+          });
+        }, 500);
+      }
+      
       // Check for unlocked achievements
       const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
       if (unlockedAchievements.length > 0) {
@@ -187,7 +208,7 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
             description: unlockedAchievements[0].description,
             duration: 5000,
           });
-        }, 1000);
+        }, newLevel ? 1500 : 1000);
       }
       
       setTaskDialogOpen(false);
@@ -207,6 +228,23 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       await db.completeTask(assignmentId, currentMember.id);
       toast.success('¡Tarea completada!');
       
+      // Check for level up
+      const newLevel = await db.updateMasteryLevel(currentMember.id);
+      if (newLevel) {
+        const levelNames = {
+          'solver': 'Solucionador',
+          'expert': 'Experto',
+          'master': 'Maestro',
+          'visionary': 'Visionario'
+        };
+        setTimeout(() => {
+          toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
+            description: 'Ahora tienes acceso a nuevas funciones',
+            duration: 5000,
+          });
+        }, 500);
+      }
+      
       // Check for unlocked achievements
       const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
       if (unlockedAchievements.length > 0) {
@@ -215,35 +253,13 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
             description: unlockedAchievements[0].description,
             duration: 5000,
           });
-        }, 1000);
+        }, newLevel ? 1500 : 1000);
       }
       
       await loadData();
     } catch (error) {
       console.error('Error completing task:', error);
       toast.error('Error al completar tarea');
-    }
-  };
-
-  const handleQuickProposal = async () => {
-    if (!quickProposal.trim() || !homeId || !currentMember) {
-      toast.error('Escribe una idea primero');
-      return;
-    }
-
-    try {
-      await db.createProposal(homeId, currentMember.id, {
-        title: quickProposal,
-        hypothesis: 'Propuesta rápida desde la vista principal',
-        status: 'pending',
-        votes_yes: 0,
-        votes_no: 0
-      });
-      toast.success('Propuesta enviada a votación');
-      setQuickProposal('');
-    } catch (error) {
-      console.error('Error creating proposal:', error);
-      toast.error('Error al enviar propuesta');
     }
   };
 
@@ -405,98 +421,16 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
         )}
       </div>
 
-      {/* SOLVER+: How It's Calculated */}
+      {/* SOLVER+: Available Cancelled Tasks Button */}
       {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
-        <Card className="p-4 mb-4 w-full bg-white">
-          <Collapsible open={showCalculation} onOpenChange={setShowCalculation}>
-            <CollapsibleTrigger asChild>
-              <button className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-[#89a7c4]" />
-                  <h4>¿Cómo se calcula el %?</h4>
-                </div>
-                {showCalculation ? (
-                  <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                )}
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-3">
-              <div className="p-3 bg-[#f5f3ed] rounded-lg">
-                <p className="text-sm mb-2">Fórmula:</p>
-                <code className="text-xs bg-white px-2 py-1 rounded block">
-                  % = (Puntos ganados / Puntos posibles) × 100
-                </code>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Completadas:</span>
-                  <span>7 tareas (18 puntos)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Asignadas:</span>
-                  <span>9 tareas (23 puntos)</span>
-                </div>
-                <div className="pt-2 border-t border-border flex justify-between">
-                  <span>Resultado:</span>
-                  <span className="text-[#6fbd9d]">18 / 23 = 78%</span>
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
-      )}
-
-      {/* MASTER+: Quick Controls */}
-      {(masteryLevel === "master" || masteryLevel === "visionary") && (
-        <Card className="p-4 mb-4 w-full bg-white">
-          <h4 className="mb-3">Controles rápidos</h4>
-          <div className="space-y-2">
-            <button 
-              onClick={() => toast.info('Configuración de meta grupal próximamente')}
-              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-            >
-              <span className="text-sm">Meta grupal:</span>
-              <Badge variant="outline">80%</Badge>
-            </button>
-            <button 
-              onClick={() => toast.info('Configuración de rotación próximamente')}
-              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-            >
-              <span className="text-sm">Rotación:</span>
-              <Badge variant="outline">Semanal</Badge>
-            </button>
-            <button 
-              onClick={() => toast.info('Configuración de recordatorios próximamente')}
-              className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-            >
-              <span className="text-sm">Recordatorios:</span>
-              <Badge className="bg-[#6fbd9d]">09:00</Badge>
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* VISIONARY: Quick Proposal */}
-      {masteryLevel === "visionary" && (
-        <Card className="p-4 mb-4 w-full bg-[#fef3e0]">
-          <h4 className="mb-2">💡 Propuesta rápida</h4>
-          <Input 
-            placeholder="Nueva idea de mejora..." 
-            className="mb-2 text-sm"
-            value={quickProposal}
-            onChange={(e) => setQuickProposal(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleQuickProposal()}
-          />
-          <Button 
-            size="sm" 
-            className="w-full bg-[#d4a574] hover:bg-[#c49565]"
-            onClick={handleQuickProposal}
-          >
-            Enviar a votación
-          </Button>
-        </Card>
+        <Button 
+          variant="outline" 
+          className="w-full mb-4"
+          onClick={() => setAvailableTasksOpen(true)}
+        >
+          <ClipboardList className="w-4 h-4 mr-2" />
+          Ver tareas disponibles
+        </Button>
       )}
 
       {/* Main Action Button */}
@@ -511,7 +445,7 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
           }
         }}
       >
-        {masteryLevel === "visionary" ? "Iniciar experimento de hoy" : "Cumplir tarea de hoy"}
+        Iniciar tarea de hoy
       </Button>
 
       {/* Tasks List */}
@@ -611,6 +545,20 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
                           </Button>
                         </>
                       )}
+                      {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setTaskToCancel(assignment);
+                            setCancelDialogOpen(true);
+                          }}
+                        >
+                          <Ban className="w-4 h-4 text-amber-500" />
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -639,157 +587,23 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
       )}
 
       {/* Task Details Dialog */}
-      <Dialog 
-        open={taskDialogOpen} 
-        onOpenChange={(open) => {
-          // Only allow closing through the button, not by clicking outside
-          if (!open) return;
-          setTaskDialogOpen(open);
+      <CompleteTaskDialog
+        open={taskDialogOpen}
+        onOpenChange={setTaskDialogOpen}
+        task={currentTaskDialog}
+        completedSteps={completedStepsInDialog}
+        onToggleStep={handleToggleStep}
+        onCompleteTask={handleCompleteTaskFromDialog}
+        onClose={async () => {
+          if (currentTaskDialog) {
+            await updateAssignmentProgress(currentTaskDialog.id);
+          }
+          setTaskDialogOpen(false);
+          setCurrentTaskDialog(null);
+          setCompletedStepsInDialog(new Set());
         }}
-      >
-        <DialogContent 
-          className="max-w-md"
-          onInteractOutside={(e) => {
-            // Prevent closing when clicking outside
-            e.preventDefault();
-          }}
-          onEscapeKeyDown={(e) => {
-            // Prevent closing with Escape key
-            e.preventDefault();
-          }}
-        >
-          {currentTaskDialog ? (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-[#f5f3ed] text-[#d4a574]">
-                    {getTaskIcon(currentTaskDialog.task_icon)}
-                  </div>
-                  <span>{currentTaskDialog.task_title}</span>
-                </DialogTitle>
-                {currentTaskDialog.task_zone_name && (
-                  <DialogDescription>
-                    Zona: {currentTaskDialog.task_zone_name} • {currentTaskDialog.task_effort} puntos
-                  </DialogDescription>
-                )}
-              </DialogHeader>
-
-              <div className="space-y-4 mt-4">
-                {currentTaskDialog.task_steps && currentTaskDialog.task_steps.length > 0 ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium">Pasos a seguir:</h4>
-                        <span className="text-xs text-muted-foreground">
-                          {(() => {
-                            const requiredSteps = currentTaskDialog.task_steps.filter(s => !s.is_optional);
-                            const requiredStepIds = new Set(requiredSteps.map(s => s.id));
-                            const completedRequired = Array.from(completedStepsInDialog).filter(id => requiredStepIds.has(id)).length;
-                            return `${completedRequired}/${requiredSteps.length} obligatorios`;
-                          })()}
-                        </span>
-                      </div>
-                      <Progress 
-                        value={(() => {
-                          const requiredSteps = currentTaskDialog.task_steps.filter(s => !s.is_optional);
-                          if (requiredSteps.length === 0) return 100;
-                          const requiredStepIds = new Set(requiredSteps.map(s => s.id));
-                          const completedRequired = Array.from(completedStepsInDialog).filter(id => requiredStepIds.has(id)).length;
-                          return (completedRequired / requiredSteps.length) * 100;
-                        })()} 
-                        className="h-2 mb-4" 
-                      />
-                      
-                      {currentTaskDialog.task_steps
-                        .sort((a, b) => a.step_order - b.step_order)
-                        .map((step) => {
-                          const isCompleted = completedStepsInDialog.has(step.id);
-                          return (
-                            <button
-                              key={step.id}
-                              onClick={() => handleToggleStep(step.id)}
-                              className={`w-full p-3 rounded-lg text-left transition-all ${
-                                isCompleted 
-                                  ? 'bg-[#e9f5f0] border-2 border-[#6fbd9d]' 
-                                  : 'bg-[#f5f3ed] hover:bg-[#ebe9e0]'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {isCompleted ? (
-                                  <CheckCircle2 className="w-5 h-5 text-[#6fbd9d] flex-shrink-0" />
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-[#d4a574] flex-shrink-0" />
-                                )}
-                                <div className="flex-1">
-                                  <span className={`text-sm ${isCompleted ? 'text-[#5fa989] line-through' : ''}`}>
-                                    {step.step_order}. {step.title}
-                                  </span>
-                                  {step.is_optional && (
-                                    <Badge variant="outline" className="ml-2 text-xs">
-                                      Opcional
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-
-                    <Button
-                      onClick={handleCompleteTaskFromDialog}
-                      className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
-                      disabled={(() => {
-                        const requiredSteps = currentTaskDialog.task_steps?.filter(s => !s.is_optional) || [];
-                        if (requiredSteps.length === 0) return false;
-                        const requiredStepIds = new Set(requiredSteps.map(s => s.id));
-                        const completedRequired = Array.from(completedStepsInDialog).filter(id => requiredStepIds.has(id)).length;
-                        return completedRequired < requiredSteps.length;
-                      })()}
-                    >
-                      Marcar tarea como completada
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="p-4 bg-[#f5f3ed] rounded-lg text-center">
-                      <p className="text-sm text-muted-foreground">
-                        Esta tarea no tiene pasos definidos
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleCompleteTaskFromDialog}
-                      className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
-                    >
-                      Marcar como completada
-                    </Button>
-                  </>
-                )}
-
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    // Update progress one last time before closing
-                    if (currentTaskDialog) {
-                      await updateAssignmentProgress(currentTaskDialog.id);
-                    }
-                    setTaskDialogOpen(false);
-                    setCurrentTaskDialog(null);
-                    setCompletedStepsInDialog(new Set());
-                  }}
-                  className="w-full"
-                >
-                  Cerrar
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="p-4">
-              <p>Cargando...</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        getTaskIcon={getTaskIcon}
+      />
 
       {/* Swap Task Modal */}
       <Dialog open={swapModalOpen} onOpenChange={setSwapModalOpen}>
@@ -858,6 +672,29 @@ export function HomeScreen({ masteryLevel, currentMember, currentUser, homeId }:
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Task Dialog */}
+      <CancelTaskDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        assignment={taskToCancel}
+        memberId={currentMember?.id || 0}
+        onSuccess={async () => {
+          await loadData();
+          setTaskToCancel(null);
+        }}
+      />
+
+      {/* Available Tasks Dialog */}
+      <AvailableTasksDialog
+        open={availableTasksOpen}
+        onOpenChange={setAvailableTasksOpen}
+        homeId={homeId || 0}
+        currentMemberId={currentMember?.id || 0}
+        onTaskTaken={async () => {
+          await loadData();
+        }}
+      />
     </div>
   );
 }

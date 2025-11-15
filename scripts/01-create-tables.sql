@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS home_members (
   weeks_active INTEGER NOT NULL DEFAULT 0,
   tasks_completed INTEGER NOT NULL DEFAULT 0,
   current_streak INTEGER NOT NULL DEFAULT 0,
+  -- Notification and preference columns
+  email_notifications BOOLEAN DEFAULT true,
+  push_notifications BOOLEAN DEFAULT true,
+  weekly_reports BOOLEAN DEFAULT true,
+  theme VARCHAR(10) DEFAULT 'system',
+  font_size VARCHAR(10) DEFAULT 'medium',
+  reminder_enabled BOOLEAN DEFAULT true,
+  reminder_time TIME DEFAULT '09:00:00',
+  reminder_days INTEGER[] DEFAULT ARRAY[1,2,3,4,5],
   joined_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(home_id, email)
@@ -272,11 +281,26 @@ CREATE TABLE IF NOT EXISTS task_favorites (
   UNIQUE(task_id, member_id)
 );
 
+-- Tabla de cancelación de tareas
+CREATE TABLE IF NOT EXISTS task_cancellations (
+  id SERIAL PRIMARY KEY,
+  assignment_id INTEGER NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
+  cancelled_by INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  is_available BOOLEAN DEFAULT TRUE,
+  taken_by INTEGER REFERENCES home_members(id) ON DELETE SET NULL,
+  cancelled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  taken_at TIMESTAMP WITH TIME ZONE,
+  UNIQUE(assignment_id)
+);
+
 -- Índices para optimizar consultas
 CREATE INDEX IF NOT EXISTS idx_homes_created_by ON homes(created_by);
 CREATE INDEX IF NOT EXISTS idx_zones_home ON zones(home_id);
 CREATE INDEX IF NOT EXISTS idx_home_members_home ON home_members(home_id);
 CREATE INDEX IF NOT EXISTS idx_home_members_user ON home_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_members_reminder_enabled ON home_members(reminder_enabled) WHERE reminder_enabled = TRUE;
+CREATE INDEX IF NOT EXISTS idx_members_reminder_time ON home_members(reminder_time) WHERE reminder_enabled = TRUE;
 CREATE INDEX IF NOT EXISTS idx_tasks_home ON tasks(home_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_zone ON tasks(zone_id);
 CREATE INDEX IF NOT EXISTS idx_task_assignments_task ON task_assignments(task_id);
@@ -295,6 +319,9 @@ CREATE INDEX IF NOT EXISTS idx_task_step_completions_step ON task_step_completio
 CREATE INDEX IF NOT EXISTS idx_task_step_completions_assignment ON task_step_completions(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_task_favorites_member ON task_favorites(member_id);
 CREATE INDEX IF NOT EXISTS idx_task_favorites_task ON task_favorites(task_id);
+CREATE INDEX IF NOT EXISTS idx_cancellations_available ON task_cancellations(is_available) WHERE is_available = TRUE;
+CREATE INDEX IF NOT EXISTS idx_cancellations_assignment ON task_cancellations(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_cancellations_cancelled_by ON task_cancellations(cancelled_by);
 
 -- Función para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()

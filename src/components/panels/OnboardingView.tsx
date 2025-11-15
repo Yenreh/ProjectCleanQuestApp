@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
-import { Button } from "./ui/button";
-import { Card } from "./ui/card";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Checkbox } from "./ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Badge } from "./ui/badge";
-import { Progress } from "./ui/progress";
+import { Button } from "../ui/button";
+import { Card } from "../ui/card";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Checkbox } from "../ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Badge } from "../ui/badge";
+import { Progress } from "../ui/progress";
 import { Home, Users, ListTodo, Sparkles, CheckCircle2, Clock, Mail, Link2, Trash2, UtensilsCrossed, Droplet, BedDouble, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { db } from "../lib/db";
+import { db } from "../../lib/db";
 
 interface OnboardingWizardProps {
   onComplete: () => void;
@@ -37,7 +37,7 @@ const iconMap: Record<string, any> = {
   'bed': BedDouble,
 };
 
-export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
+export function OnboardingView({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState<Step>("create-home");
   const [completedSteps, setCompletedSteps] = useState<Set<Step>>(new Set());
   
