@@ -4,14 +4,31 @@ import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
-import { TrendingUp, TrendingDown, Minus, Trophy, Zap, Target, Settings, Lightbulb, Users, Clock, CheckCircle2, Star, Loader2, AlertCircle, Calendar, Home, BarChart3, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Trophy, Zap, Target, Settings, Lightbulb, Users, Clock, CheckCircle2, Star, Loader2, AlertCircle, Calendar, Home as HomeIcon, BarChart3, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { AvailableTasksDialog } from "../dialogs/AvailableTasksDialog";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
-import type { HomeMember, HomeMetrics, Achievement } from "../../lib/types";
+import type { HomeMember, HomeMetrics, Home, ImprovementProposal } from "../../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
+
+interface TaskEffortBreakdown {
+  light: number;
+  medium: number;
+  heavy: number;
+}
+
+interface WeeklyTrend {
+  week: string;
+  percentage: number;
+}
+
+interface ChangeLogEntry {
+  date: string;
+  description: string;
+  changedBy: string;
+}
 
 interface ProgressPanelProps {
   masteryLevel: MasteryLevel;
@@ -23,7 +40,11 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
   const [isLoading, setIsLoading] = useState(true);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [members, setMembers] = useState<HomeMember[]>([]);
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [home, setHome] = useState<Home | null>(null);
+  const [effortBreakdown, setEffortBreakdown] = useState<TaskEffortBreakdown>({ light: 0, medium: 0, heavy: 0 });
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrend[]>([]);
+  const [changeLog, setChangeLog] = useState<ChangeLogEntry[]>([]);
+  const [activeProposals, setActiveProposals] = useState<ImprovementProposal[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [availableTasksOpen, setAvailableTasksOpen] = useState(false);
   
@@ -38,15 +59,33 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
     
     setIsLoading(true);
     try {
-      const [homeMetrics, homeMembers, memberAchievements] = await Promise.all([
+      const [homeMetrics, homeMembers, homeData] = await Promise.all([
         db.getHomeMetrics(homeId),
         db.getHomeMembers(homeId),
-        db.getMemberAchievements(currentMember.id)
+        db.getHome(homeId)
       ]);
       
       setMetrics(homeMetrics);
       setMembers(homeMembers.filter(m => m.status === 'active'));
-      setAchievements(memberAchievements);
+      setHome(homeData);
+      
+      // Load effort breakdown
+      await loadEffortBreakdown();
+      
+      // Load weekly trend for Solver+
+      if (masteryLevel !== 'novice') {
+        await loadWeeklyTrend();
+      }
+      
+      // Load change log for Expert+
+      if (masteryLevel === 'expert' || masteryLevel === 'solver') {
+        await loadChangeLog();
+      }
+      
+      // Load proposals for Visionary
+      if (masteryLevel === 'visionary') {
+        await loadActiveProposals();
+      }
     } catch (error) {
       console.error('Error loading progress data:', error);
       toast.error('Error al cargar datos de progreso');
@@ -55,12 +94,92 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
     }
   };
 
+  const loadEffortBreakdown = async () => {
+    if (!homeId) return;
+    
+    try {
+      const tasks = await db.getTasks(homeId, true);
+      let light = 0, medium = 0, heavy = 0;
+      
+      tasks.forEach(task => {
+        if (task.effort_points <= 2) light++;
+        else if (task.effort_points <= 4) medium++;
+        else heavy++;
+      });
+      
+      const total = tasks.length || 1;
+      setEffortBreakdown({
+        light: Math.round((light / total) * 100),
+        medium: Math.round((medium / total) * 100),
+        heavy: Math.round((heavy / total) * 100)
+      });
+    } catch (error) {
+      console.error('Error loading effort breakdown:', error);
+    }
+  };
+
+  const loadWeeklyTrend = async () => {
+    if (!homeId) return;
+    
+    try {
+      // Get data for the last 3 weeks
+      const trends: WeeklyTrend[] = [];
+      const today = new Date();
+      
+      for (let i = 2; i >= 0; i--) {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() - (i * 7));
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 6);
+        
+        const percentage = await db.calculateRotationPercentage(
+          homeId,
+          weekStart.toISOString().split('T')[0],
+          weekEnd.toISOString().split('T')[0]
+        );
+        
+        trends.push({
+          week: i === 0 ? 'Semana actual' : `Hace ${i} semana${i > 1 ? 's' : ''}`,
+          percentage: 100 - percentage // Invertir para mostrar completitud
+        });
+      }
+      
+      setWeeklyTrend(trends);
+    } catch (error) {
+      console.error('Error loading weekly trend:', error);
+    }
+  };
+
+  const loadChangeLog = async () => {
+    if (!homeId) return;
+    
+    try {
+      // For now, we'll create placeholder data
+      // TODO: Implement actual change_log queries when available
+      setChangeLog([
+        {
+          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
+          description: 'Meta grupal actualizada a ' + (home?.goal_percentage || 80) + '%',
+          changedBy: members[0]?.full_name || members[0]?.email || 'Admin'
+        }
+      ]);
+    } catch (error) {
+      console.error('Error loading change log:', error);
+    }
+  };
+
+  const loadActiveProposals = async () => {
+    if (!homeId) return;
+    
+    try {
+      const proposals = await db.getProposals(homeId, 'testing');
+      setActiveProposals(proposals);
+    } catch (error) {
+      console.error('Error loading proposals:', error);
+    }
+  };
+
   const houseLevel = metrics?.completion_percentage || 0;
-  
-  const suggestions = [
-    { title: "Combinar tareas de cocina", impact: "+12%", effort: "bajo" },
-    { title: "Ajustar frecuencia de baño", impact: "+8%", effort: "medio" },
-  ];
 
   if (isLoading) {
     return (
@@ -153,24 +272,6 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
             </div>
           </Card>
 
-          {/* Badges - Large Display for Novice */}
-          <Card className="p-6 mb-6">
-            <h3 className="mb-4">Insignias desbloqueadas</h3>
-            <div className="flex gap-4">
-              {achievements.slice(0, 3).map((achievement) => (
-                <div key={achievement.id} className="flex flex-col items-center gap-2">
-                  <div className="w-16 h-16 rounded-full bg-[#fef3e0] flex items-center justify-center">
-                    <Trophy className="w-8 h-8 text-[#d4a574]" />
-                  </div>
-                  <span className="text-sm text-center">{achievement.title}</span>
-                </div>
-              ))}
-              {achievements.length === 0 && (
-                <p className="text-sm text-muted-foreground">Completa tareas para desbloquear insignias</p>
-              )}
-            </div>
-          </Card>
-
           {/* Contextual Tip */}
           <Card className="p-4 bg-[#f0f7ff]">
             <div className="flex gap-3">
@@ -192,7 +293,7 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
           <TabsList className="w-full !grid grid-cols-4">
             {tabs.includes("overview") && (
               <TabsTrigger value="overview">
-                <Home className="w-4 h-4" />
+                <HomeIcon className="w-4 h-4" />
               </TabsTrigger>
             )}
             {tabs.includes("analysis") && (
@@ -240,16 +341,6 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                 })}
               </div>
             </Card>
-
-            {/* Badges - Compact */}
-            <div className="flex flex-wrap gap-2">
-              {achievements.slice(0, 5).map((achievement) => (
-                <Badge key={achievement.id} className="bg-[#fef3e0] text-[#d4a574]">
-                  <Trophy className="w-3 h-3 mr-1" />
-                  {achievement.title}
-                </Badge>
-              ))}
-            </div>
           </TabsContent>
 
           {/* Analysis Tab (Solver+) */}
@@ -260,65 +351,71 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Tareas ligeras (1 pto)</span>
-                      <span>40%</span>
+                      <span>Tareas ligeras (1-2 ptos)</span>
+                      <span>{effortBreakdown.light}%</span>
                     </div>
-                    <Progress value={40} className="h-2" />
+                    <Progress value={effortBreakdown.light} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Tareas medias (3 ptos)</span>
-                      <span>35%</span>
+                      <span>Tareas medias (3-4 ptos)</span>
+                      <span>{effortBreakdown.medium}%</span>
                     </div>
-                    <Progress value={35} className="h-2" />
+                    <Progress value={effortBreakdown.medium} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Tareas pesadas (5 ptos)</span>
-                      <span>25%</span>
+                      <span>Tareas pesadas (5+ ptos)</span>
+                      <span>{effortBreakdown.heavy}%</span>
                     </div>
-                    <Progress value={25} className="h-2" />
+                    <Progress value={effortBreakdown.heavy} className="h-2" />
                   </div>
                 </div>
               </Card>
 
               <Card className="p-4 bg-white">
                 <h4 className="mb-3">Tendencia semanal</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between p-2 bg-[#f5f3ed] rounded">
-                    <span>Semana 1</span>
-                    <span className="text-[#6fbd9d]">72%</span>
+                {weeklyTrend.length > 0 ? (
+                  <div className="space-y-2 text-sm">
+                    {weeklyTrend.map((trend, index) => (
+                      <div 
+                        key={index} 
+                        className={`flex justify-between p-2 rounded ${
+                          index === weeklyTrend.length - 1 ? 'bg-[#e9f5f0]' : 'bg-[#f5f3ed]'
+                        }`}
+                      >
+                        <span>{trend.week}</span>
+                        <span className="text-[#6fbd9d]">{trend.percentage}%</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between p-2 bg-[#f5f3ed] rounded">
-                    <span>Semana 2</span>
-                    <span className="text-[#6fbd9d]">75%</span>
-                  </div>
-                  <div className="flex justify-between p-2 bg-[#e9f5f0] rounded">
-                    <span>Semana 3 (actual)</span>
-                    <span className="text-[#6fbd9d]">78%</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hay suficientes datos históricos</p>
+                )}
               </Card>
 
               <Card className="p-4 bg-white">
                 <div className="flex items-center gap-2 mb-3">
                   <Lightbulb className="w-5 h-5 text-[#d4a574]" />
-                  <h4>Sugerencias de optimización</h4>
+                  <h4>Estadísticas generales</h4>
                 </div>
-                <div className="space-y-3">
-                  {suggestions.map((suggestion, index) => (
-                    <div key={index} className="p-3 bg-[#f5f3ed] rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm flex-1">{suggestion.title}</p>
-                        <Badge className="bg-[#e9f5f0] text-[#6fbd9d] ml-2">
-                          {suggestion.impact}
-                        </Badge>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        Esfuerzo: {suggestion.effort}
+                <div className="space-y-2">
+                  <div className="p-3 bg-[#f5f3ed] rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Total de tareas activas</span>
+                      <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
+                        {metrics?.total_tasks || 0}
                       </Badge>
                     </div>
-                  ))}
+                  </div>
+                  <div className="p-3 bg-[#f5f3ed] rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Miembros activos</span>
+                      <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">
+                        {metrics?.active_members || 0}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
               </Card>
             </TabsContent>
@@ -349,18 +446,19 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                   <Calendar className="w-5 h-5 text-[#89a7c4]" />
                   <h4>Historial de cambios</h4>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="p-2 bg-[#f5f3ed] rounded">
-                    <p className="font-medium">2 Nov 2025</p>
-                    <p className="text-muted-foreground">Meta grupal actualizada a 80%</p>
-                    <p className="text-xs text-muted-foreground">Por: Ana</p>
+                {changeLog.length > 0 ? (
+                  <div className="space-y-2 text-sm">
+                    {changeLog.map((entry, index) => (
+                      <div key={index} className="p-2 bg-[#f5f3ed] rounded">
+                        <p className="font-medium">{entry.date}</p>
+                        <p className="text-muted-foreground">{entry.description}</p>
+                        <p className="text-xs text-muted-foreground">Por: {entry.changedBy}</p>
+                      </div>
+                    ))}
                   </div>
-                  <div className="p-2 bg-[#f5f3ed] rounded">
-                    <p className="font-medium">28 Oct 2025</p>
-                    <p className="text-muted-foreground">Rotación cambiada a semanal</p>
-                    <p className="text-xs text-muted-foreground">Por: Carlos</p>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hay cambios recientes registrados</p>
+                )}
               </Card>
             </TabsContent>
           )}
@@ -376,21 +474,17 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg">
                     <span className="text-sm">Meta grupal</span>
-                    <Badge variant="outline">80%</Badge>
+                    <Badge variant="outline">{home?.goal_percentage || 80}%</Badge>
                   </div>
                   <div className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg">
-                    <span className="text-sm">Umbral de rotación</span>
-                    <Badge variant="outline">33%</Badge>
+                    <span className="text-sm">Política de rotación</span>
+                    <Badge variant="outline">
+                      {home?.rotation_policy === 'daily' && 'Diaria'}
+                      {home?.rotation_policy === 'weekly' && 'Semanal'}
+                      {home?.rotation_policy === 'biweekly' && 'Quincenal'}
+                      {home?.rotation_policy === 'monthly' && 'Mensual'}
+                    </Badge>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
-                    size="sm"
-                    onClick={() => toast.info('Editar configuración próximamente')}
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    Editar configuración
-                  </Button>
                 </div>
               </Card>
 
@@ -401,45 +495,17 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="text-center p-2 bg-[#e9f5f0] rounded">
-                    <p className="text-xl text-[#6fbd9d]">82%</p>
+                    <p className="text-xl text-[#6fbd9d]">{metrics?.completion_percentage || 0}%</p>
                     <p className="text-xs text-muted-foreground">Completitud</p>
                   </div>
                   <div className="text-center p-2 bg-[#fef3e0] rounded">
-                    <p className="text-xl text-[#d4a574]">28%</p>
-                    <p className="text-xs text-muted-foreground">Rotación</p>
+                    <p className="text-xl text-[#d4a574]">{metrics?.rotation_percentage || 0}%</p>
+                    <p className="text-xs text-muted-foreground">Equidad</p>
                   </div>
                   <div className="text-center p-2 bg-[#f0f7ff] rounded">
-                    <p className="text-xl text-[#89a7c4]">95%</p>
-                    <p className="text-xs text-muted-foreground">Participación</p>
+                    <p className="text-xl text-[#89a7c4]">{metrics?.active_members || 0}</p>
+                    <p className="text-xs text-muted-foreground">Miembros</p>
                   </div>
-                </div>
-              </Card>
-
-              {/* Controles rápidos (movidos desde HomeScreen) */}
-              <Card className="p-4 bg-white">
-                <h4 className="mb-3">Controles rápidos</h4>
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => toast.info('Configuración de meta grupal próximamente')}
-                    className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-                  >
-                    <span className="text-sm">Meta grupal:</span>
-                    <Badge variant="outline">80%</Badge>
-                  </button>
-                  <button 
-                    onClick={() => toast.info('Configuración de rotación próximamente')}
-                    className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-                  >
-                    <span className="text-sm">Rotación:</span>
-                    <Badge variant="outline">Semanal</Badge>
-                  </button>
-                  <button 
-                    onClick={() => toast.info('Configuración de recordatorios próximamente')}
-                    className="w-full flex items-center justify-between p-2 bg-[#f5f3ed] rounded hover:bg-[#ebe9e0] transition-colors"
-                  >
-                    <span className="text-sm">Recordatorios:</span>
-                    <Badge className="bg-[#6fbd9d]">09:00</Badge>
-                  </button>
                 </div>
               </Card>
             </TabsContent>
@@ -542,38 +608,48 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
           {/* Experiments Tab (Visionary) */}
           {masteryLevel === "visionary" && (
             <TabsContent value="experiments" className="space-y-4">
-              <Card className="p-4 bg-[#fef3e0]">
-                <h4 className="mb-3">🧪 Experimento activo</h4>
-                <div className="p-3 bg-white rounded-lg mb-3">
-                  <p className="text-sm mb-1">Agrupar tareas por zona</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>Día 4 de 7</span>
-                    <span>•</span>
-                    <span>Impacto esperado: +15%</span>
-                  </div>
-                </div>
-                <Progress value={57} className="h-2 mb-2" />
-                <p className="text-xs text-muted-foreground">57% del período de prueba</p>
-              </Card>
+              {activeProposals.length > 0 ? (
+                activeProposals.map((proposal) => {
+                  const testStart = proposal.test_start_date ? new Date(proposal.test_start_date) : new Date();
+                  const testEnd = proposal.test_end_date ? new Date(proposal.test_end_date) : new Date();
+                  const today = new Date();
+                  const totalDays = Math.max(1, Math.ceil((testEnd.getTime() - testStart.getTime()) / (1000 * 60 * 60 * 24)));
+                  const elapsedDays = Math.ceil((today.getTime() - testStart.getTime()) / (1000 * 60 * 60 * 24));
+                  const progress = Math.min(100, Math.max(0, Math.round((elapsedDays / totalDays) * 100)));
+                  
+                  return (
+                    <Card key={proposal.id} className="p-4 bg-[#fef3e0]">
+                      <h4 className="mb-3">🧪 Experimento activo</h4>
+                      <div className="p-3 bg-white rounded-lg mb-3">
+                        <p className="text-sm mb-1">{proposal.title}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>Día {elapsedDays} de {totalDays}</span>
+                          <span>•</span>
+                          <span>{proposal.expected_impact || 'Midiendo impacto'}</span>
+                        </div>
+                      </div>
+                      <Progress value={progress} className="h-2 mb-2" />
+                      <p className="text-xs text-muted-foreground">{progress}% del período de prueba</p>
+                    </Card>
+                  );
+                })
+              ) : (
+                <Card className="p-4 bg-[#fef3e0]">
+                  <h4 className="mb-3">🧪 Experimentos</h4>
+                  <p className="text-sm text-muted-foreground">No hay experimentos activos en este momento</p>
+                </Card>
+              )}
 
               <Card className="p-4 bg-white">
-                <h4 className="mb-3">Resultados de pruebas A/B</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="p-3 bg-[#e9f5f0] rounded-lg">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">Rotación semanal vs diaria</span>
-                      <Badge className="bg-[#6fbd9d]">+12% eficiencia</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Completado: 1 Nov 2025</p>
-                  </div>
-                  <div className="p-3 bg-[#f5f3ed] rounded-lg">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">Recordatorios matutinos</span>
-                      <Badge variant="outline">Sin cambio</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Completado: 15 Oct 2025</p>
-                  </div>
-                </div>
+                <h4 className="mb-3">Propuestas disponibles</h4>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => toast.info('Gestión de propuestas próximamente')}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Ver todas las propuestas
+                </Button>
               </Card>
             </TabsContent>
           )}

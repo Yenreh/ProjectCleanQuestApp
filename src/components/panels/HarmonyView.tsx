@@ -6,13 +6,21 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import { Sparkles, Heart, Home as HomeIcon, TrendingUp, Users, CheckCircle2, Star, AlertTriangle, Lightbulb, Target, Home, Loader2, Trophy, Calendar, Clock, FileText, Settings, BarChart3 } from "lucide-react";
+import { Sparkles, Heart, Home as HomeIcon, TrendingUp, Users, CheckCircle2, Star, AlertTriangle, Lightbulb, Target, Home as HomeLucideIcon, Loader2, Trophy, Calendar, Clock, FileText, Settings, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
-import type { Zone, Achievement, HomeMember, HomeMetrics } from "../../lib/types";
+import { StatisticsDialog } from "../dialogs/StatisticsDialog";
+import { NextCycleDialog } from "../dialogs/NextCycleDialog";
+import type { Zone, Achievement, HomeMember, HomeMetrics, Home, ImprovementProposal } from "../../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
+
+interface ChangeLogEntry {
+  date: string;
+  change: string;
+  author: string;
+}
 
 interface HarmonyRoomProps {
   masteryLevel: MasteryLevel;
@@ -25,9 +33,16 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
   const [zones, setZones] = useState<Zone[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
+  const [home, setHome] = useState<Home | null>(null);
+  const [members, setMembers] = useState<HomeMember[]>([]);
+  const [completedProposals, setCompletedProposals] = useState<ImprovementProposal[]>([]);
+  const [changeLog, setChangeLog] = useState<ChangeLogEntry[]>([]);
+  const [zoneStatus, setZoneStatus] = useState<{ [zoneId: number]: { total: number; completed: number; percentage: number } }>({});
   const [goalPercentage, setGoalPercentage] = useState("80");
   const [rotationPolicy, setRotationPolicy] = useState("weekly");
   const [autoRotation, setAutoRotation] = useState(true);
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
+  const [nextCycleOpen, setNextCycleOpen] = useState(false);
 
   const handleUpdateGoal = async () => {
     if (!homeId) return;
@@ -35,6 +50,7 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     try {
       await db.updateHome(homeId, { goal_percentage: parseInt(goalPercentage) });
       toast.success('Meta actualizada');
+      await loadData(); // Recargar datos
     } catch (error) {
       console.error('Error updating goal:', error);
       toast.error('Error al actualizar meta');
@@ -50,6 +66,7 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
         auto_rotation: autoRotation 
       });
       toast.success('Política de rotación actualizada');
+      await loadData(); // Recargar datos
     } catch (error) {
       console.error('Error updating rotation:', error);
       toast.error('Error al actualizar rotación');
@@ -67,15 +84,37 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     
     setIsLoading(true);
     try {
-      const [homeZones, memberAchievements, homeMetrics] = await Promise.all([
+      const [homeZones, memberAchievements, homeMetrics, homeData, homeMembers, zonesStatus] = await Promise.all([
         db.getZones(homeId),
         db.getMemberAchievements(currentMember.id),
-        db.getHomeMetrics(homeId)
+        db.getHomeMetrics(homeId),
+        db.getHome(homeId),
+        db.getHomeMembers(homeId),
+        db.getZoneStatus(homeId)
       ]);
       
       setZones(homeZones);
       setAchievements(memberAchievements);
       setMetrics(homeMetrics);
+      setHome(homeData);
+      setMembers(homeMembers.filter(m => m.status === 'active'));
+      setZoneStatus(zonesStatus);
+      
+      // Cargar configuración actual del home
+      if (homeData) {
+        setGoalPercentage(homeData.goal_percentage?.toString() || "80");
+        setRotationPolicy(homeData.rotation_policy || "weekly");
+        setAutoRotation(homeData.auto_rotation ?? true);
+      }
+      
+      // Cargar propuestas completadas para Visionary
+      if (masteryLevel === 'visionary') {
+        const proposals = await db.getProposals(homeId, 'implemented');
+        setCompletedProposals(proposals);
+      }
+      
+      // Cargar historial de cambios
+      await loadChangeLog();
     } catch (error) {
       console.error('Error loading harmony room data:', error);
       toast.error('Error al cargar datos');
@@ -84,27 +123,34 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     }
   };
 
-  const consecutiveWeeks = metrics?.consecutive_weeks || 0;
-  const completionRate = metrics?.completion_percentage || 0;
-
-  const templates = [
-    { id: 1, name: "Semana de exámenes", description: "Reduce tareas en 50%", active: false },
-    { id: 2, name: "Visitas familiares", description: "Intensifica limpieza previa", active: false },
-  ];
-
-  const handleToggleTemplate = (templateId: number) => {
-    toast.info(`Plantilla ${templateId === 1 ? 'Semana de exámenes' : 'Visitas familiares'} ${templates.find(t => t.id === templateId)?.active ? 'desactivada' : 'activada'}`);
+  const loadChangeLog = async () => {
+    if (!homeId) return;
+    
+    try {
+      // Por ahora crear entradas de ejemplo basadas en datos reales
+      const entries: ChangeLogEntry[] = [];
+      
+      if (home) {
+        entries.push({
+          date: new Date(home.updated_at || home.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
+          change: `Meta grupal configurada a ${home.goal_percentage}%`,
+          author: members[0]?.full_name || members[0]?.email || 'Admin'
+        });
+      }
+      
+      setChangeLog(entries);
+    } catch (error) {
+      console.error('Error loading change log:', error);
+    }
   };
 
-  const changelog = [
-    { date: "2 Nov 2025", change: "Meta grupal actualizada a 80%", author: "Ana" },
-    { date: "28 Oct 2025", change: "Rotación cambiada a semanal", author: "Carlos" },
-  ];
+  const consecutiveWeeks = metrics?.consecutive_weeks || 0;
+  const completionRate = metrics?.completion_percentage || 0;
 
   const getZoneIcon = (iconName?: string) => {
     switch (iconName) {
       case 'sparkles': return <Sparkles className="w-6 h-6" />;
-      case 'home': return <Home className="w-6 h-6" />;
+      case 'home': return <HomeLucideIcon className="w-6 h-6" />;
       case 'utensils': return <Sparkles className="w-6 h-6" />;
       default: return <CheckCircle2 className="w-6 h-6" />;
     }
@@ -248,22 +294,10 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
               <p className="text-sm text-muted-foreground mb-4">
                 Activa plantillas para situaciones específicas
               </p>
-              <div className="space-y-3">
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm">{template.name}</p>
-                      <p className="text-xs text-muted-foreground">{template.description}</p>
-                    </div>
-                    <Switch 
-                      checked={template.active}
-                      onCheckedChange={() => handleToggleTemplate(template.id)}
-                    />
-                  </div>
-                ))}
+              <div className="p-4 bg-muted/30 rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">
+                  No hay plantillas especiales configuradas
+                </p>
               </div>
               <Button 
                 variant="outline" 
@@ -332,14 +366,20 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
                 <Settings className="w-5 h-5 text-muted-foreground" />
                 <h4>Historial de cambios</h4>
               </div>
-              <div className="space-y-2">
-                {changelog.map((entry, index) => (
-                  <div key={index} className="p-2 border-l-2 border-[#6fbd9d] pl-3">
-                    <p className="text-xs text-muted-foreground">{entry.date} • {entry.author}</p>
-                    <p className="text-sm">{entry.change}</p>
-                  </div>
-                ))}
-              </div>
+              {changeLog.length > 0 ? (
+                <div className="space-y-2">
+                  {changeLog.map((entry, index) => (
+                    <div key={index} className="p-2 border-l-2 border-[#6fbd9d] pl-3">
+                      <p className="text-xs text-muted-foreground">{entry.date} • {entry.author}</p>
+                      <p className="text-sm">{entry.change}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No hay cambios recientes registrados
+                </p>
+              )}
             </Card>
           </TabsContent>
         </Tabs>
@@ -350,25 +390,55 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
         <h3 className="mb-4 text-center">Estado del hogar</h3>
         <div className="grid grid-cols-2 gap-4">
           {zones.map((zone) => {
-            const status = completionRate >= 90 ? 'excellent' : 'clean';
+            const status = zoneStatus[zone.id];
+            const percentage = status?.percentage || 0;
+            const goalPercent = home?.goal_percentage || 80;
+            
+            // Determinar el estado visual según el porcentaje
+            let statusClass = '';
+            let statusBadge = null;
+            
+            if (percentage >= goalPercent) {
+              // Excelente: cumple o supera la meta
+              statusClass = "bg-gradient-to-br from-[#e9f5f0] to-[#d0ebe0] border-2 border-[#6fbd9d]/30";
+              statusBadge = <Badge className="mt-2 bg-[#6fbd9d] hover:bg-[#5fa989]">Excelente</Badge>;
+            } else if (percentage >= goalPercent * 0.7) {
+              // Bien: al menos 70% de la meta
+              statusClass = "bg-gradient-to-br from-[#fef3e0] to-[#f5ecd0] border-2 border-[#d4a574]/30";
+              statusBadge = <Badge className="mt-2 bg-[#d4a574] hover:bg-[#c49565]">En progreso</Badge>;
+            } else if (percentage > 0) {
+              // Necesita atención: hay tareas pero bajo porcentaje
+              statusClass = "bg-gradient-to-br from-[#fff0f0] to-[#ffe0e0] border-2 border-[#e57373]/30";
+              statusBadge = <Badge className="mt-2 bg-[#e57373] hover:bg-[#d66565]">Atención</Badge>;
+            } else {
+              // Sin datos o 0%
+              statusClass = "bg-muted/30";
+              statusBadge = <Badge variant="outline" className="mt-2">Sin datos</Badge>;
+            }
+            
             return (
               <div 
                 key={zone.id} 
-                className={`p-4 rounded-lg text-center transition-all ${
-                  status === "excellent" 
-                    ? "bg-gradient-to-br from-[#e9f5f0] to-[#d0ebe0] border-2 border-[#6fbd9d]/30" 
-                    : "bg-muted/30"
-                }`}
+                className={`p-4 rounded-lg text-center transition-all ${statusClass}`}
               >
                 <div className={`inline-flex p-3 rounded-full mb-2 ${
-                  status === "excellent" ? "bg-[#6fbd9d]/20 text-[#6fbd9d]" : "bg-muted text-muted-foreground"
+                  percentage >= goalPercent 
+                    ? "bg-[#6fbd9d]/20 text-[#6fbd9d]" 
+                    : percentage >= goalPercent * 0.7
+                    ? "bg-[#d4a574]/20 text-[#d4a574]"
+                    : percentage > 0
+                    ? "bg-[#e57373]/20 text-[#e57373]"
+                    : "bg-muted text-muted-foreground"
                 }`}>
                   {getZoneIcon(zone.icon)}
                 </div>
-                <p>{zone.name}</p>
-                {status === "excellent" && (
-                  <Badge className="mt-2 bg-[#6fbd9d] hover:bg-[#5fa989]">Excelente</Badge>
+                <p className="font-medium">{zone.name}</p>
+                {status && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {status.completed}/{status.total} tareas ({percentage}%)
+                  </p>
                 )}
+                {statusBadge}
               </div>
             );
           })}
@@ -425,15 +495,21 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Equidad de carga:</span>
-              <Badge className="bg-[#e9f5f0] text-[#6fbd9d]">Excelente</Badge>
+              <Badge className={`${
+                metrics && metrics.rotation_percentage >= 70 
+                  ? 'bg-[#e9f5f0] text-[#6fbd9d]' 
+                  : 'bg-[#fef3e0] text-[#d4a574]'
+              }`}>
+                {metrics && metrics.rotation_percentage >= 70 ? 'Excelente' : 'Regular'}
+              </Badge>
             </div>
             <div className="flex justify-between text-sm">
-              <span>Variación entre miembros:</span>
-              <span className="text-muted-foreground">±8%</span>
+              <span>Índice de equidad:</span>
+              <span className="text-muted-foreground">{metrics?.rotation_percentage || 0}%</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span>Índice de colaboración:</span>
-              <span className="text-[#6fbd9d]">9.2/10</span>
+              <span>Miembros activos:</span>
+              <span className="text-[#6fbd9d]">{metrics?.active_members || 0}</span>
             </div>
           </div>
         </Card>
@@ -441,37 +517,40 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
 
       {/* VISIONARY: Experiments Results */}
       {masteryLevel === "visionary" && (
-        <Card className="p-4 mb-6 bg-[#fef3e0]">
-          <h4 className="mb-3">🧪 Experimento completado: "Agrupar tareas por zona"</h4>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="p-2 bg-white rounded">
-              <p className="text-xs text-muted-foreground">Antes</p>
-              <p className="text-lg">78%</p>
-            </div>
-            <div className="p-2 bg-[#e9f5f0] rounded">
-              <p className="text-xs text-muted-foreground">Después</p>
-              <p className="text-lg text-[#6fbd9d]">85%</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              size="sm" 
-              className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
-              onClick={() => toast.success('Cambio adoptado exitosamente')}
-            >
-              <CheckCircle2 className="w-4 h-4 mr-1" />
-              Adoptar cambio
-            </Button>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              className="flex-1"
-              onClick={() => toast.info('Cambio revertido')}
-            >
-              Revertir
-            </Button>
-          </div>
-        </Card>
+        <>
+          {completedProposals.length > 0 ? (
+            completedProposals.slice(0, 1).map((proposal) => (
+              <Card key={proposal.id} className="p-4 mb-6 bg-[#fef3e0]">
+                <h4 className="mb-3">🧪 Experimento completado: "{proposal.title}"</h4>
+                <div className="p-3 bg-white rounded-lg mb-3">
+                  <p className="text-sm text-muted-foreground mb-2">{proposal.hypothesis}</p>
+                  {proposal.result_data && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-2 bg-muted/30 rounded">
+                        <p className="text-xs text-muted-foreground">Antes</p>
+                        <p className="text-lg">{proposal.result_data.before || 'N/A'}</p>
+                      </div>
+                      <div className="p-2 bg-[#e9f5f0] rounded">
+                        <p className="text-xs text-muted-foreground">Después</p>
+                        <p className="text-lg text-[#6fbd9d]">{proposal.result_data.after || 'N/A'}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Implementado: {new Date(proposal.updated_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+              </Card>
+            ))
+          ) : (
+            <Card className="p-4 mb-6 bg-[#fef3e0]">
+              <h4 className="mb-3">🧪 Experimentos</h4>
+              <p className="text-sm text-muted-foreground">
+                No hay experimentos completados aún
+              </p>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Action Buttons */}
@@ -480,7 +559,7 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
           variant="outline" 
           size="lg" 
           className="h-14"
-          onClick={() => toast.info('Estadísticas detalladas próximamente')}
+          onClick={() => setStatisticsOpen(true)}
         >
           <BarChart3 className="w-5 h-5 mr-2" />
           Ver estadísticas
@@ -488,14 +567,27 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
         <Button 
           size="lg" 
           className="h-14 bg-[#6fbd9d] hover:bg-[#5fa989]"
-          onClick={() => toast.info('Configuración semanal próximamente')}
+          onClick={() => setNextCycleOpen(true)}
         >
           <Calendar className="w-5 h-5 mr-2" />
-          {masteryLevel === "master" || masteryLevel === "visionary" 
-            ? "Configurar semana"
-            : "Próxima semana"}
+          Próximo ciclo
         </Button>
       </div>
+
+      {/* Dialogs */}
+      <StatisticsDialog
+        open={statisticsOpen}
+        onOpenChange={setStatisticsOpen}
+        metrics={metrics}
+        members={members}
+        home={home}
+      />
+
+      <NextCycleDialog
+        open={nextCycleOpen}
+        onOpenChange={setNextCycleOpen}
+        home={home}
+      />
     </div>
   );
 }

@@ -76,6 +76,7 @@ const DialogContent = React.forwardRef<
           maxWidth: '500px',
           width: '90%',
           maxHeight: '95%',
+          overflowY: 'auto',
         }}
         {...props}
       >

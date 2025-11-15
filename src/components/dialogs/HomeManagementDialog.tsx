@@ -84,6 +84,7 @@ export function HomeManagementDialog({
   // Home config state
   const [homeName, setHomeName] = useState(currentHome?.name || "");
   const [groupGoal, setGroupGoal] = useState(currentHome?.goal_percentage || 80);
+  const [rotationPolicy, setRotationPolicy] = useState<string>(currentHome?.rotation_policy || "weekly");
   const [rotationEnabled, setRotationEnabled] = useState(currentHome?.auto_rotation || false);
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export function HomeManagementDialog({
     if (currentHome) {
       setHomeName(currentHome.name || "");
       setGroupGoal(currentHome.goal_percentage || 80);
+      setRotationPolicy(currentHome.rotation_policy || "weekly");
       setRotationEnabled(currentHome.auto_rotation || false);
     }
   }, [currentHome]);
@@ -397,6 +399,7 @@ export function HomeManagementDialog({
       await db.updateHome(homeId, {
         name: homeName,
         goal_percentage: groupGoal,
+        rotation_policy: rotationPolicy as "daily" | "weekly" | "biweekly" | "monthly",
         auto_rotation: rotationEnabled
       });
       toast.success('Configuración actualizada');
@@ -941,10 +944,28 @@ export function HomeManagementDialog({
                 />
               </div>
 
+              <div>
+                <Label htmlFor="rotation-policy" className="text-sm">Política de rotación</Label>
+                <Select value={rotationPolicy} onValueChange={setRotationPolicy}>
+                  <SelectTrigger id="rotation-policy">
+                    <SelectValue placeholder="Selecciona la frecuencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Diaria</SelectItem>
+                    <SelectItem value="weekly">Semanal</SelectItem>
+                    <SelectItem value="biweekly">Quincenal</SelectItem>
+                    <SelectItem value="monthly">Mensual</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Define cada cuánto se cierran ciclos y rotan las tareas
+                </p>
+              </div>
+
               <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
                 <div>
                   <p className="text-sm font-medium">Rotación automática</p>
-                  <p className="text-xs text-muted-foreground">Asignar tareas cada semana</p>
+                  <p className="text-xs text-muted-foreground">Reasignar tareas automáticamente</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input

@@ -824,7 +824,20 @@ export const db = {
     if (!supabase) return [];
 
     try {
-      // Obtener tareas canceladas y disponibles
+      // Obtener política de rotación del hogar
+      const { data: home } = await supabase
+        .from('homes')
+        .select('rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      if (!home) return [];
+      
+      const rotationPolicy = home.rotation_policy || 'weekly';
+      const cycleStart = this.getCycleStartDate(rotationPolicy);
+      const cycleStartStr = cycleStart.toISOString().split('T')[0];
+
+      // Obtener tareas canceladas y disponibles del ciclo actual
       const { data: cancelledData, error: cancelledError } = await supabase
         .from('task_cancellations')
         .select(`
@@ -837,6 +850,7 @@ export const db = {
             id,
             assigned_date,
             due_date,
+            status,
             tasks!inner (
               id,
               title,
@@ -860,12 +874,35 @@ export const db = {
         .eq('is_available', true)
         .eq('task_assignments.tasks.home_id', homeId)
         .eq('task_assignments.status', 'skipped')
+        .gte('task_assignments.assigned_date', cycleStartStr)
         .order('cancelled_at', { ascending: false });
 
       if (cancelledError) throw cancelledError;
 
-      // Obtener tareas activas sin asignaciones
-      const { data: unassignedData, error: unassignedError } = await supabase
+      // Obtener todas las asignaciones del ciclo actual
+      const { data: currentAssignments, error: assignmentsError } = await supabase
+        .from('task_assignments')
+        .select('task_id, status, home_members!inner(home_id)')
+        .eq('home_members.home_id', homeId)
+        .gte('assigned_date', cycleStartStr);
+
+      if (assignmentsError) throw assignmentsError;
+
+      // Crear sets de tareas pendientes y completadas
+      const pendingTaskIds = new Set(
+        (currentAssignments || [])
+          .filter((a: any) => a.status === 'pending')
+          .map((a: any) => a.task_id)
+      );
+      
+      const completedTaskIds = new Set(
+        (currentAssignments || [])
+          .filter((a: any) => a.status === 'completed')
+          .map((a: any) => a.task_id)
+      );
+
+      // Obtener tareas activas que NO tienen asignaciones pendientes NI completadas en el ciclo
+      const { data: availableTasks, error: tasksError } = await supabase
         .from('tasks')
         .select(`
           id,
@@ -879,23 +916,13 @@ export const db = {
         .eq('home_id', homeId)
         .eq('is_active', true);
 
-      if (unassignedError) throw unassignedError;
+      if (tasksError) throw tasksError;
 
-      // Obtener IDs de tareas que ya tienen asignaciones
-      const { data: assignedTaskIds, error: assignedError } = await supabase
-        .from('task_assignments')
-        .select('task_id')
-        .eq('status', 'pending');
-
-      if (assignedError) throw assignedError;
-
-      const assignedIds = new Set((assignedTaskIds || []).map((a: any) => a.task_id));
-
-      // Filtrar tareas sin asignaciones pendientes
-      const unassignedTasks = (unassignedData || [])
-        .filter((task: any) => !assignedIds.has(task.id))
+      // Filtrar tareas: solo las que no están pendientes ni completadas
+      const unassignedTasks = (availableTasks || [])
+        .filter((task: any) => !pendingTaskIds.has(task.id) && !completedTaskIds.has(task.id))
         .map((task: any) => ({
-          cancellation_id: 0, // No es una cancelación
+          cancellation_id: 0,
           assignment_id: 0,
           task_id: task.id,
           task_title: task.title,
@@ -904,10 +931,10 @@ export const db = {
           zone_name: task.zones?.name || 'Sin zona',
           cancelled_by_id: 0,
           cancelled_by_name: 'Sistema',
-          cancellation_reason: 'Tarea nueva sin asignar',
+          cancellation_reason: 'Tarea disponible en el ciclo',
           cancelled_at: new Date().toISOString(),
           assigned_date: new Date().toISOString(),
-          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días desde ahora
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
         }));
 
       // Transformar tareas canceladas
@@ -928,7 +955,7 @@ export const db = {
       }));
 
       // Combinar ambas listas
-      return [...unassignedTasks, ...cancelledTasks];
+      return [...cancelledTasks, ...unassignedTasks];
     } catch (error) {
       console.error('Error loading available tasks:', error);
       return [];
@@ -1613,33 +1640,45 @@ export const db = {
       }
     }
     
-    // Get completion stats
-    const today = new Date().toISOString().split('T')[0]
-    const weekStart = new Date()
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = weekStart.toISOString().split('T')[0]
+    // Obtener configuración del hogar
+    const { data: home } = await supabase
+      .from('homes')
+      .select('rotation_policy')
+      .eq('id', homeId)
+      .single();
+    
+    const rotationPolicy = home?.rotation_policy || 'weekly';
+    
+    // Calcular inicio y fin del ciclo actual
+    const today = new Date();
+    const cycleStart = this.getCycleStartDate(rotationPolicy, today);
+    const cycleStartStr = cycleStart.toISOString().split('T')[0];
+    const todayStr = today.toISOString().split('T')[0];
     
     const { data: assignments } = await supabase
       .from('task_assignments')
       .select('*, home_members!inner(home_id)')
       .eq('home_members.home_id', homeId)
-      .gte('assigned_date', weekStartStr)
+      .gte('assigned_date', cycleStartStr);
     
-    const totalTasks = assignments?.length || 0
-    const completedTasks = assignments?.filter(a => a.status === 'completed').length || 0
-    const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+    const totalTasks = assignments?.length || 0;
+    const completedTasks = assignments?.filter(a => a.status === 'completed').length || 0;
+    const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     
     // Get member count
     const { data: members } = await supabase
       .from('home_members')
       .select('id, total_points')
       .eq('home_id', homeId)
-      .eq('status', 'active')
+      .eq('status', 'active');
     
-    const totalPoints = members?.reduce((sum, m) => sum + m.total_points, 0) || 0
+    const totalPoints = members?.reduce((sum, m) => sum + m.total_points, 0) || 0;
     
     // Calculate rotation percentage (equitable distribution)
-    const rotationPercentage = await this.calculateRotationPercentage(homeId, weekStartStr, today)
+    const rotationPercentage = await this.calculateRotationPercentage(homeId, cycleStartStr, todayStr);
+    
+    // Calculate consecutive cycles with good performance
+    const consecutiveWeeks = await this.calculateConsecutiveWeeks(homeId);
     
     return {
       completion_percentage: completionPercentage,
@@ -1649,7 +1688,213 @@ export const db = {
       pending_tasks: totalTasks - completedTasks,
       active_members: members?.length || 0,
       total_points_earned: totalPoints,
-      consecutive_weeks: 4 // TODO: Calculate from history
+      consecutive_weeks: consecutiveWeeks
+    };
+  },
+
+  // ========== CYCLE MANAGEMENT ==========
+
+  getCycleStartDate(rotationPolicy: string, referenceDate: Date = new Date()): Date {
+    const cycleStart = new Date(referenceDate);
+    
+    switch (rotationPolicy) {
+      case 'daily':
+        cycleStart.setHours(0, 0, 0, 0);
+        break;
+      
+      case 'weekly':
+        // Domingo = inicio de semana
+        cycleStart.setDate(cycleStart.getDate() - cycleStart.getDay());
+        cycleStart.setHours(0, 0, 0, 0);
+        break;
+      
+      case 'biweekly':
+        // Calcular inicio de quincena (día 1 o 15)
+        const day = cycleStart.getDate();
+        if (day >= 15) {
+          cycleStart.setDate(15);
+        } else {
+          cycleStart.setDate(1);
+        }
+        cycleStart.setHours(0, 0, 0, 0);
+        break;
+      
+      case 'monthly':
+        // Primer día del mes
+        cycleStart.setDate(1);
+        cycleStart.setHours(0, 0, 0, 0);
+        break;
+    }
+    
+    return cycleStart;
+  },
+
+  getCycleEndDate(rotationPolicy: string, cycleStart: Date): Date {
+    const cycleEnd = new Date(cycleStart);
+    
+    switch (rotationPolicy) {
+      case 'daily':
+        cycleEnd.setDate(cycleEnd.getDate() + 1);
+        break;
+      
+      case 'weekly':
+        cycleEnd.setDate(cycleEnd.getDate() + 7);
+        break;
+      
+      case 'biweekly':
+        cycleEnd.setDate(cycleEnd.getDate() + 14);
+        break;
+      
+      case 'monthly':
+        cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+        break;
+    }
+    
+    cycleEnd.setSeconds(cycleEnd.getSeconds() - 1);
+    return cycleEnd;
+  },
+
+  async closeCycleAndReassign(homeId: number): Promise<{ closed: number; assigned: number }> {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    try {
+      // Obtener configuración del hogar
+      const { data: home } = await supabase
+        .from('homes')
+        .select('rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      if (!home) throw new Error('Home not found');
+      
+      const rotationPolicy = home.rotation_policy || 'weekly';
+      const today = new Date();
+      const currentCycleStart = this.getCycleStartDate(rotationPolicy, today);
+      const currentCycleStartStr = currentCycleStart.toISOString().split('T')[0];
+      
+      // 1. Cerrar tareas pendientes del ciclo actual
+      const { data: pendingAssignments, error: fetchError } = await supabase
+        .from('task_assignments')
+        .select('id, home_members!inner(home_id)')
+        .eq('home_members.home_id', homeId)
+        .eq('status', 'pending')
+        .gte('assigned_date', currentCycleStartStr);
+      
+      if (fetchError) throw fetchError;
+      
+      let closedCount = 0;
+      if (pendingAssignments && pendingAssignments.length > 0) {
+        const assignmentIds = pendingAssignments.map(a => a.id);
+        
+        const { error: updateError } = await supabase
+          .from('task_assignments')
+          .update({ status: 'skipped' })
+          .in('id', assignmentIds);
+        
+        if (updateError) throw updateError;
+        closedCount = assignmentIds.length;
+      }
+      
+      // 2. Calcular nuevo ciclo
+      const nextCycleStart = this.getCycleEndDate(rotationPolicy, currentCycleStart);
+      
+      // 3. Reasignar todas las tareas para el nuevo ciclo
+      const assignments = await this.autoAssignTasks(homeId, nextCycleStart);
+      
+      // 4. Registrar en change_log
+      await supabase.from('change_log').insert({
+        home_id: homeId,
+        change_type: 'cycle_rotation',
+        change_description: `Ciclo cerrado: ${closedCount} tareas pendientes marcadas como omitidas. ${assignments.length} tareas reasignadas para el nuevo ciclo.`,
+        old_value: currentCycleStartStr,
+        new_value: nextCycleStart.toISOString().split('T')[0]
+      });
+      
+      return {
+        closed: closedCount,
+        assigned: assignments.length
+      };
+    } catch (error) {
+      console.error('Error closing cycle and reassigning:', error);
+      throw error;
+    }
+  },
+
+  async calculateConsecutiveWeeks(homeId: number): Promise<number> {
+    if (!supabase) return 0;
+    
+    try {
+      // Get home to check goal percentage and rotation policy
+      const { data: home } = await supabase
+        .from('homes')
+        .select('goal_percentage, rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      if (!home) return 0;
+      
+      const goalPercentage = home.goal_percentage || 80;
+      const rotationPolicy = home.rotation_policy || 'weekly';
+      let consecutiveCycles = 0;
+      const today = new Date();
+      
+      // Calcular cuántos ciclos revisar según la política
+      let cyclesToCheck = 12;
+      let dayIncrement = 7;
+      
+      switch (rotationPolicy) {
+        case 'daily':
+          cyclesToCheck = 30;
+          dayIncrement = 1;
+          break;
+        case 'weekly':
+          cyclesToCheck = 12;
+          dayIncrement = 7;
+          break;
+        case 'biweekly':
+          cyclesToCheck = 6;
+          dayIncrement = 14;
+          break;
+        case 'monthly':
+          cyclesToCheck = 3;
+          dayIncrement = 30;
+          break;
+      }
+      
+      for (let i = 0; i < cyclesToCheck; i++) {
+        const referenceDate = new Date(today);
+        referenceDate.setDate(referenceDate.getDate() - (i * dayIncrement));
+        
+        const cycleStart = this.getCycleStartDate(rotationPolicy, referenceDate);
+        const cycleEnd = this.getCycleEndDate(rotationPolicy, cycleStart);
+        
+        // Get assignments for this cycle
+        const { data: assignments } = await supabase
+          .from('task_assignments')
+          .select('status, home_members!inner(home_id)')
+          .eq('home_members.home_id', homeId)
+          .gte('assigned_date', cycleStart.toISOString().split('T')[0])
+          .lte('assigned_date', cycleEnd.toISOString().split('T')[0]);
+        
+        if (!assignments || assignments.length === 0) {
+          break;
+        }
+        
+        const totalTasks = assignments.length;
+        const completedTasks = assignments.filter(a => a.status === 'completed').length;
+        const cyclePercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        
+        if (cyclePercentage >= goalPercentage) {
+          consecutiveCycles++;
+        } else {
+          break;
+        }
+      }
+      
+      return consecutiveCycles;
+    } catch (error) {
+      console.error('Error calculating consecutive cycles:', error);
+      return 0;
     }
   },
 
@@ -2006,6 +2251,78 @@ export const db = {
     } catch (error) {
       console.error('Error updating member preferences:', error);
       throw error;
+    }
+  },
+
+  // ========== ZONE STATUS ==========
+  
+  async getZoneStatus(homeId: number): Promise<{ [zoneId: number]: { total: number; completed: number; percentage: number } }> {
+    if (!supabase) return {};
+
+    try {
+      // Obtener política de rotación del hogar
+      const { data: home } = await supabase
+        .from('homes')
+        .select('rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      const rotationPolicy = home?.rotation_policy || 'weekly';
+      
+      // Calcular inicio del ciclo actual
+      const cycleStart = this.getCycleStartDate(rotationPolicy);
+      const cycleStartStr = cycleStart.toISOString().split('T')[0];
+
+      const { data: assignments, error } = await supabase
+        .from('task_assignments')
+        .select(`
+          id,
+          status,
+          tasks!inner (
+            zone_id
+          ),
+          home_members!inner (
+            home_id
+          )
+        `)
+        .eq('home_members.home_id', homeId)
+        .gte('assigned_date', cycleStartStr);
+
+      if (error) throw error;
+      if (!assignments) return {};
+
+      // Group by zone_id
+      const zoneStats: { [zoneId: number]: { total: number; completed: number } } = {};
+
+      assignments.forEach((assignment: any) => {
+        const zoneId = assignment.tasks?.zone_id;
+        if (zoneId !== null && zoneId !== undefined) {
+          if (!zoneStats[zoneId]) {
+            zoneStats[zoneId] = { total: 0, completed: 0 };
+          }
+          zoneStats[zoneId].total++;
+          if (assignment.status === 'completed') {
+            zoneStats[zoneId].completed++;
+          }
+        }
+      });
+
+      // Calculate percentages
+      const result: { [zoneId: number]: { total: number; completed: number; percentage: number } } = {};
+      Object.keys(zoneStats).forEach(zoneIdStr => {
+        const zoneId = parseInt(zoneIdStr);
+        const stats = zoneStats[zoneId];
+        result[zoneId] = {
+          total: stats.total,
+          completed: stats.completed,
+          percentage: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Error getting zone status:', error);
+      return {};
     }
   }
 }

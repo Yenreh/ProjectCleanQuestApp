@@ -170,7 +170,7 @@ export function ProfileSettingsDialog({
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <p className="text-xs text-muted-foreground">Función de avatar en desarrollo</p>
+              
               </div>
 
               <div>
