@@ -19,54 +19,61 @@ interface UserStats {
 }
 
 // Define requirements for each level
-const MASTERY_REQUIREMENTS: MasteryRequirements[] = [
-  {
-    level: 'visionary',
-    minPoints: 3000,
-    minAchievements: 15,
-    minWeeksActive: 12,
-    minTasksCompleted: 300
-  },
-  {
-    level: 'master',
-    minPoints: 1500,
-    minAchievements: 10,
-    minWeeksActive: 8,
-    minTasksCompleted: 150
-  },
-  {
-    level: 'expert',
-    minPoints: 500,
-    minAchievements: 5,
-    minWeeksActive: 4,
-    minTasksCompleted: 50
-  },
-  {
-    level: 'solver',
-    minPoints: 100,
-    minAchievements: 2,
-    minWeeksActive: 2,
-    minTasksCompleted: 15
-  },
+// Level progression uses HYBRID system (OR logic) - meet ANY condition to level up
+// This matches the backend db.ts calculation for consistency
+const LEVEL_REQUIREMENTS: MasteryRequirements[] = [
   {
     level: 'novice',
     minPoints: 0,
     minAchievements: 0,
     minWeeksActive: 0,
-    minTasksCompleted: 0
-  }
+    minTasksCompleted: 0,
+  },
+  {
+    level: 'solver', // Early game (3-7 days)
+    minPoints: 30,        // 30 points (3 tasks @ 10pts each)
+    minAchievements: 2,   // OR 2 achievements
+    minWeeksActive: 1,    // OR 1 week active
+    minTasksCompleted: 3, // OR 3 tasks completed
+  },
+  {
+    level: 'expert', // Mid-early game (1-2 weeks)
+    minPoints: 120,        // 120 points (12 tasks)
+    minAchievements: 3,    // OR 3 achievements
+    minWeeksActive: 2,     // OR 2 weeks active
+    minTasksCompleted: 12, // OR 12 tasks completed
+  },
+  {
+    level: 'master', // Mid-late game (3-4 weeks)
+    minPoints: 300,        // 300 points (30 tasks)
+    minAchievements: 5,    // OR 5 achievements
+    minWeeksActive: 4,     // OR 4 weeks active
+    minTasksCompleted: 30, // OR 30 tasks completed
+  },
+  {
+    level: 'visionary', // End game (5+ weeks)
+    minPoints: 600,        // 600 points (60 tasks)
+    minAchievements: 8,    // OR 8 achievements
+    minWeeksActive: 8,     // OR 8 weeks active
+    minTasksCompleted: 60, // OR 60 tasks completed
+  },
 ]
 
 /**
  * Calculate the mastery level based on user statistics
- * Returns the highest level for which the user meets ALL requirements
+ * Uses OR logic - user reaches next level if they meet ANY ONE of the requirements
+ * This matches the backend db.ts hybrid scoring system
  */
 export function calculateMasteryLevel(stats: UserStats): MasteryLevel {
-  for (const requirement of MASTERY_REQUIREMENTS) {
+  // Check from highest to lowest level
+  for (let i = LEVEL_REQUIREMENTS.length - 1; i >= 0; i--) {
+    const requirement = LEVEL_REQUIREMENTS[i]
+    
+    // User reaches this level if they meet ANY requirement (OR logic)
     if (
-      stats.totalPoints >= requirement.minPoints &&
-      stats.achievementsUnlocked >= requirement.minAchievements &&
-      stats.weeksActive >= requirement.minWeeksActive &&
+      stats.totalPoints >= requirement.minPoints ||
+      stats.achievementsUnlocked >= requirement.minAchievements ||
+      stats.weeksActive >= requirement.minWeeksActive ||
       stats.tasksCompleted >= requirement.minTasksCompleted
     ) {
       return requirement.level
@@ -80,13 +87,13 @@ export function calculateMasteryLevel(stats: UserStats): MasteryLevel {
  * Get the next level requirements
  */
 export function getNextLevelRequirements(currentLevel: MasteryLevel): MasteryRequirements | null {
-  const currentIndex = MASTERY_REQUIREMENTS.findIndex(r => r.level === currentLevel)
+  const currentIndex = LEVEL_REQUIREMENTS.findIndex(r => r.level === currentLevel)
   
-  if (currentIndex <= 0) {
-    return null // Already at max level
+  if (currentIndex === -1 || currentIndex === LEVEL_REQUIREMENTS.length - 1) {
+    return null // Already at max level or level not found
   }
   
-  return MASTERY_REQUIREMENTS[currentIndex - 1]
+  return LEVEL_REQUIREMENTS[currentIndex + 1]
 }
 
 /**

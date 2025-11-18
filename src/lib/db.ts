@@ -952,13 +952,30 @@ export const db = {
     
     const newStreak = yesterdayCompletion ? (memberData.data.current_streak || 0) + 1 : 1
     
-    // OPTIMIZATION 4: Single update for all member stats
+    // Get member to update weeks_active
+    const { data: fullMember } = await supabase
+      .from('home_members')
+      .select('created_at, weeks_active')
+      .eq('id', memberId)
+      .single()
+    
+    // Calculate weeks active
+    let weeksActive = 0
+    if (fullMember?.created_at) {
+      const joinDate = new Date(fullMember.created_at)
+      const now = new Date()
+      const weeksDiff = Math.floor((now.getTime() - joinDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
+      weeksActive = Math.max(1, weeksDiff + 1)
+    }
+    
+    // OPTIMIZATION 4: Single update for all member stats including weeks_active
     await supabase
       .from('home_members')
       .update({ 
         total_points: (memberData.data.total_points || 0) + pointsEarned,
         tasks_completed: (memberData.data.tasks_completed || 0) + 1,
-        current_streak: newStreak
+        current_streak: newStreak,
+        weeks_active: weeksActive
       })
       .eq('id', memberId)
     
@@ -1727,32 +1744,36 @@ export const db = {
     
     if (!member) return null
     
-    // Determine mastery level based on stats
+    // Get achievement count for level calculation
+    const achievementsCount = await this.getMemberAchievementsCount(memberId)
+    
+    // Calculate mastery level using HYBRID system (OR logic for faster progression)
     let newLevel = member.mastery_level
     
     // Calculate a "mastery score" based on different factors
     const tasksScore = member.tasks_completed || 0
     const weeksScore = (member.weeks_active || 0) * 3 // Weeks are more valuable
     const streakScore = Math.min((member.current_streak || 0) * 0.5, 10) // Max 10 points from streak
-    const totalScore = tasksScore + weeksScore + streakScore
+    const achievementsScore = (achievementsCount || 0) * 2 // Achievements worth 2 points each
+    const totalScore = tasksScore + weeksScore + streakScore + achievementsScore
     
-    // Level progression with hybrid requirements:
+    // Level progression with hybrid requirements (OR logic - meet ANY condition):
     // NOVICE -> SOLVER: Early game (3-7 days)
-    //   - 3+ tasks OR 1+ week active OR score >= 8
+    //   - 3+ tasks OR 1+ week active OR 2+ achievements OR score >= 10
     // SOLVER -> EXPERT: Mid-early game (1-2 weeks)
-    //   - 12+ tasks OR 2+ weeks active OR score >= 20
+    //   - 12+ tasks OR 2+ weeks active OR 3+ achievements OR score >= 25
     // EXPERT -> MASTER: Mid-late game (3-4 weeks)
-    //   - 30+ tasks OR 3+ weeks active OR score >= 40
+    //   - 30+ tasks OR 4+ weeks active OR 5+ achievements OR score >= 50
     // MASTER -> VISIONARY: End game (5+ weeks)
-    //   - 60+ tasks OR 5+ weeks active OR score >= 70
+    //   - 60+ tasks OR 8+ weeks active OR 8+ achievements OR score >= 100
     
-    if (totalScore >= 70 || member.tasks_completed >= 60 || member.weeks_active >= 5) {
+    if (totalScore >= 100 || member.tasks_completed >= 60 || member.weeks_active >= 8 || achievementsCount >= 8) {
       newLevel = 'visionary'
-    } else if (totalScore >= 40 || member.tasks_completed >= 30 || member.weeks_active >= 3) {
+    } else if (totalScore >= 50 || member.tasks_completed >= 30 || member.weeks_active >= 4 || achievementsCount >= 5) {
       newLevel = 'master'
-    } else if (totalScore >= 20 || member.tasks_completed >= 12 || member.weeks_active >= 2) {
+    } else if (totalScore >= 25 || member.tasks_completed >= 12 || member.weeks_active >= 2 || achievementsCount >= 3) {
       newLevel = 'expert'
-    } else if (totalScore >= 8 || member.tasks_completed >= 3 || member.weeks_active >= 1) {
+    } else if (totalScore >= 10 || member.tasks_completed >= 3 || member.weeks_active >= 1 || achievementsCount >= 2) {
       newLevel = 'solver'
     } else {
       newLevel = 'novice'
