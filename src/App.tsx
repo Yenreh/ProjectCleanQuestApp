@@ -297,9 +297,13 @@ export default function App() {
   }
 
   const renderScreen = () => {
+    const handleLevelUpdate = (newLevel: MasteryLevel) => {
+      setMasteryLevel(newLevel);
+    };
+
     switch (currentScreen) {
       case "home":
-        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
+        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} onLevelUpdate={handleLevelUpdate} />;
       case "progress":
         return <ProgressView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       case "challenges":
@@ -307,7 +311,7 @@ export default function App() {
       case "harmony":
         return <HarmonyView masteryLevel={masteryLevel} currentMember={currentMember} homeId={currentHome?.id} />;
       default:
-        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} />;
+        return <HomeView masteryLevel={masteryLevel} currentMember={currentMember} currentUser={currentUser} homeId={currentHome?.id} onLevelUpdate={handleLevelUpdate} />;
     }
   };
 

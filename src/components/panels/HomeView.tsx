@@ -19,9 +19,10 @@ interface HomeScreenProps {
   currentMember?: HomeMember | null;
   currentUser?: Profile | null;
   homeId?: number | null;
+  onLevelUpdate?: (newLevel: MasteryLevel) => void;
 }
 
-export const HomeView = memo(function HomeView({ masteryLevel, currentMember, currentUser, homeId }: HomeScreenProps) {
+export const HomeView = memo(function HomeView({ masteryLevel, currentMember, currentUser, homeId, onLevelUpdate }: HomeScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
@@ -170,6 +171,7 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
     
     if (newLevel) {
       hasLevelUp = true;
+      onLevelUpdate?.(newLevel);
       setTimeout(() => {
         toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
           description: 'Ahora tienes acceso a nuevas funciones',
