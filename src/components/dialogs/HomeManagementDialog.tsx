@@ -26,7 +26,8 @@ import {
   UserPlus,
   Crown,
   Shield,
-  User as UserIcon
+  User as UserIcon,
+  Link2
 } from "lucide-react";
 import {
   Select,
@@ -81,6 +82,7 @@ export function HomeManagementDialog({
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("member");
+  const [generatedInviteLink, setGeneratedInviteLink] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<HomeMember | null>(null);
   const [editMemberRole, setEditMemberRole] = useState<MemberRole>("member");
   const [memberToRemove, setMemberToRemove] = useState<HomeMember | null>(null);
@@ -361,6 +363,7 @@ export function HomeManagementDialog({
   const handleOpenInviteForm = () => {
     setInviteEmail("");
     setInviteRole("member");
+    setGeneratedInviteLink(null);
     setShowInviteForm(true);
   };
 
@@ -368,6 +371,7 @@ export function HomeManagementDialog({
     setShowInviteForm(false);
     setInviteEmail("");
     setInviteRole("member");
+    setGeneratedInviteLink(null);
   };
 
   const handleInviteMember = async () => {
@@ -380,23 +384,53 @@ export function HomeManagementDialog({
     try {
       const result = await db.inviteMember(homeId, { email: inviteEmail, role: inviteRole });
       
-      // Show invitation link that can be copied
+      // Save generated link and show it in the UI
       if (result.invite_link) {
-        navigator.clipboard.writeText(result.invite_link);
-        toast.success('Invitación enviada', {
-          description: 'Link copiado al portapapeles. Compártelo con el nuevo miembro.'
+        setGeneratedInviteLink(result.invite_link);
+        toast.success('Invitación creada', {
+          description: 'Ahora puedes copiar el link o compartirlo directamente'
         });
       } else {
         toast.success('Invitación enviada');
+        handleCancelInviteForm();
       }
       
-      handleCancelInviteForm();
       await loadData();
     } catch (error) {
       console.error('Error inviting member:', error);
       toast.error('Error al enviar invitación');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    if (generatedInviteLink) {
+      navigator.clipboard.writeText(generatedInviteLink);
+      toast.success('Link copiado al portapapeles');
+    }
+  };
+
+  const handleShareInviteLink = async () => {
+    if (!generatedInviteLink) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Únete a ${currentHome?.name || 'nuestro hogar'} en CleanQuest`,
+          text: `Te invito a unirte a nuestro hogar en CleanQuest. Usa este link:`,
+          url: generatedInviteLink
+        });
+        toast.success('Link compartido');
+      } catch (error) {
+        // User cancelled share or error occurred
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Error sharing:', error);
+        }
+      }
+    } else {
+      // Fallback: just copy to clipboard
+      handleCopyInviteLink();
     }
   };
 
@@ -1061,47 +1095,92 @@ export function HomeManagementDialog({
                 <Card className="p-4">
                   <h4 className="text-sm font-medium mb-4">Invitar miembro</h4>
                   <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="invite-email">Email</Label>
-                      <Input
-                        id="invite-email"
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="correo@ejemplo.com"
-                      />
-                    </div>
+                    {!generatedInviteLink ? (
+                      <>
+                        <div>
+                          <Label htmlFor="invite-email">Email</Label>
+                          <Input
+                            id="invite-email"
+                            type="email"
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                            placeholder="correo@ejemplo.com"
+                          />
+                        </div>
 
-                    <div>
-                      <Label htmlFor="invite-role">Rol</Label>
-                      <Select value={inviteRole} onValueChange={(value: string) => setInviteRole(value as MemberRole)}>
-                        <SelectTrigger id="invite-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="member">Miembro</SelectItem>
-                          <SelectItem value="admin">Administrador</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                        <div>
+                          <Label htmlFor="invite-role">Rol</Label>
+                          <Select value={inviteRole} onValueChange={(value: string) => setInviteRole(value as MemberRole)}>
+                            <SelectTrigger id="invite-role">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="member">Miembro</SelectItem>
+                              <SelectItem value="admin">Administrador</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleCancelInviteForm}
-                        className="flex-1"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        onClick={handleInviteMember}
-                        disabled={isLoading}
-                        className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
-                      >
-                        {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        Invitar
-                      </Button>
-                    </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelInviteForm}
+                            className="flex-1"
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            onClick={handleInviteMember}
+                            disabled={isLoading}
+                            className="flex-1 bg-[#6fbd9d] hover:bg-[#5fa989]"
+                          >
+                            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Generar Link
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Link de invitación generado</Label>
+                          <div className="p-3 bg-muted rounded-md text-sm break-all">
+                            {generatedInviteLink}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Comparte este link con <strong>{inviteEmail}</strong> para que se una al hogar
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Button
+                            onClick={handleCopyInviteLink}
+                            className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+                          >
+                            <Link2 className="w-4 h-4 mr-2" />
+                            Copiar Link
+                          </Button>
+                          
+                          {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                            <Button
+                              onClick={handleShareInviteLink}
+                              variant="outline"
+                              className="w-full"
+                            >
+                              <Users className="w-4 h-4 mr-2" />
+                              Compartir
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            onClick={handleCancelInviteForm}
+                            className="w-full"
+                          >
+                            Cerrar
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               )}

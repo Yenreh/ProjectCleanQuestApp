@@ -65,44 +65,59 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('invite');
     if (token) {
+      // Save token to localStorage for persistence through login
+      localStorage.setItem('pending_invitation', token);
       setInvitationToken(token);
+      
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
       
-      // If user is already authenticated, check if they have an active home
+      // If user is already authenticated, trigger a reload to process it
       (async () => {
         const user = await db.getCurrentUser();
         if (user) {
-          // Check if user already has an active membership
-          const { member, home } = await db.getUserHomeMembership(user.id);
-          
-          if (member && home) {
-            // User already has a home, show confirmation dialog
-            const invitationInfo = await db.getInvitationByToken(token);
-            if (invitationInfo) {
-              setChangeHomeData({
-                token,
-                currentHomeName: home.name,
-                newHomeName: invitationInfo.homes.name
-              });
-              setShowChangeHomeDialog(true);
-            }
-          } else {
-            // User doesn't have a home, accept invitation directly
-            try {
-              await db.acceptInvitation(token, user.id);
-              toast.success('¡Te has unido al hogar!');
-              setInvitationToken(null);
-              await loadUserData(user.id);
-            } catch (error: any) {
-              console.error('Error accepting invitation:', error);
-              toast.error(error.message || 'Error al aceptar la invitación');
-            }
-          }
+          // Don't process directly - let loadUserData handle it
+          // This ensures proper checking of whether user has a home
+          setIsLoading(true);
+          await loadUserData(user.id);
+          setIsLoading(false);
+        } else {
+          // User not authenticated, show message to login/register
+          toast.info('Inicia sesión o regístrate para aceptar la invitación', {
+            duration: 5000
+          });
         }
       })();
+    } else {
+      // Check if there's a pending invitation in localStorage
+      const pendingToken = localStorage.getItem('pending_invitation');
+      if (pendingToken) {
+        setInvitationToken(pendingToken);
+      }
     }
   }, []);
+
+  // Process invitation token (only for users without a home)
+  async function processInvitation(token: string, userId: string) {
+    try {
+      // Accept invitation directly (user doesn't have a home)
+      await db.acceptInvitation(token, userId);
+      toast.success('¡Te has unido al hogar!');
+      
+      // Clear token from state and localStorage
+      setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
+      
+      await loadUserData(userId);
+    } catch (error: any) {
+      console.error('Error processing invitation:', error);
+      toast.error(error.message || 'Error al procesar la invitación');
+      
+      // Clear token on error to prevent infinite loop
+      setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
+    }
+  }
 
   // Check authentication on mount
   useEffect(() => {
@@ -112,12 +127,14 @@ export default function App() {
     const subscription = db.onAuthStateChange((userId) => {
       if (userId) {
         setIsAuthenticated(true);
-        loadUserData(userId);
+        setIsLoading(true); // Set loading state while fetching user data
+        loadUserData(userId).finally(() => setIsLoading(false));
       } else {
         setIsAuthenticated(false);
         setCurrentUser(null);
         setCurrentHome(null);
         setCurrentMember(null);
+        setHasCompletedOnboarding(false);
       }
     });
     
@@ -144,36 +161,46 @@ export default function App() {
       // Get user profile
       let profile = await db.getProfile(userId);
       if (!profile) {
-        setIsLoading(false);
         return;
       }
       
       setCurrentUser(profile);
       
-      // Check if user has a pending invitation by token
-      if (invitationToken) {
-        try {
-          // Accept invitation if token is present
-          await db.acceptInvitation(invitationToken, userId);
-          toast.success('¡Te has unido al hogar!');
-          setInvitationToken(null);
-          
-          // Reload profile after accepting invitation to get updated onboarding status
-          const updatedProfile = await db.getProfile(userId);
-          if (updatedProfile) {
-            profile = updatedProfile;
-            setCurrentUser(updatedProfile);
-          }
-        } catch (error) {
-          console.error('Error accepting invitation:', error);
-          toast.error('Error al aceptar la invitación');
-        }
-      }
-      
       // Check onboarding status from profile
       if (profile.has_completed_onboarding) {
         // Load home membership data
         const { member, home } = await db.getUserHomeMembership(userId);
+        
+        // Check if user has a pending invitation (from localStorage or state)
+        const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
+        if (pendingToken && member && home) {
+          // User has a home and a pending invitation - show confirmation dialog
+          try {
+            const invitationInfo = await db.getInvitationByToken(pendingToken);
+            if (invitationInfo) {
+              setChangeHomeData({
+                token: pendingToken,
+                currentHomeName: home.name,
+                newHomeName: invitationInfo.homes.name
+              });
+              setShowChangeHomeDialog(true);
+            } else {
+              // Invalid token - clear it
+              setInvitationToken(null);
+              localStorage.removeItem('pending_invitation');
+              toast.error('El enlace de invitación no es válido o ha expirado');
+            }
+          } catch (error) {
+            console.error('Error checking invitation:', error);
+            setInvitationToken(null);
+            localStorage.removeItem('pending_invitation');
+          }
+          // Continue loading user data below with current home...
+        } else if (pendingToken && (!member || !home)) {
+          // User doesn't have a home but has invitation - process directly
+          await processInvitation(pendingToken, userId);
+          return; // loadUserData will be called again after processing
+        }
         
         if (member && home) {
           setHasCompletedOnboarding(true);
@@ -210,11 +237,8 @@ export default function App() {
         // User needs to complete onboarding
         setHasCompletedOnboarding(false);
       }
-
-      setIsLoading(false);
     } catch (error) {
       console.error('Error loading user data:', error);
-      setIsLoading(false);
     }
   }
 
@@ -226,6 +250,11 @@ export default function App() {
       setCurrentHome(null);
       setCurrentMember(null);
       setHasCompletedOnboarding(false);
+      
+      // Clear any pending invitation tokens
+      setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
+      
       toast.success("Sesión cerrada");
     } catch (error) {
       console.error("Sign out error:", error);
@@ -240,29 +269,42 @@ export default function App() {
     try {
       await db.acceptInvitation(changeHomeData.token, currentUser.id);
       toast.success('¡Te has cambiado de casa exitosamente!');
+      
+      // Clear token from both state and localStorage
       setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
+      
       setShowChangeHomeDialog(false);
       setChangeHomeData(null);
       await loadUserData(currentUser.id);
     } catch (error: any) {
       console.error('Error changing home:', error);
       toast.error(error.message || 'Error al cambiar de casa');
+      
+      // Clear token even on error to prevent infinite loop
+      setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
     } finally {
       setIsChangingHome(false);
     }
   };
 
   const handleCancelChangeHome = () => {
+    // Clear token from both state and localStorage when user cancels
+    setInvitationToken(null);
+    localStorage.removeItem('pending_invitation');
+    
     setShowChangeHomeDialog(false);
     setChangeHomeData(null);
-    setInvitationToken(null);
     toast.info('Has permanecido en tu casa actual');
   };
 
   async function handleOnboardingComplete() {
     // Reload user data so we read the newly created home/tasks from backend
     if (currentUser) {
+      setIsLoading(true);
       await loadUserData(currentUser.id);
+      setIsLoading(false);
       // `loadUserData` will set `hasCompletedOnboarding` based on DB state
     }
   }
@@ -286,6 +328,19 @@ export default function App() {
         onSuccess={() => setIsAuthenticated(true)} 
         invitationToken={invitationToken}
       />
+    );
+  }
+
+  // If authenticated but we don't have user data yet, keep loading
+  // This prevents the flash of onboarding screen while data loads
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fafaf9]">
+        <div className="text-center">
+          <Sparkles className="w-12 h-12 text-[#6fbd9d] animate-pulse mx-auto mb-4" />
+          <p className="text-muted-foreground">Cargando perfil...</p>
+        </div>
+      </div>
     );
   }
 
@@ -505,7 +560,14 @@ export default function App() {
       {changeHomeData && (
         <ChangeHomeConfirmDialog
           open={showChangeHomeDialog}
-          onOpenChange={setShowChangeHomeDialog}
+          onOpenChange={(open) => {
+            // Prevent closing dialog with external clicks
+            if (!open && !isChangingHome) {
+              // Only allow closing via cancel button
+              return;
+            }
+            setShowChangeHomeDialog(open);
+          }}
           currentHomeName={changeHomeData.currentHomeName}
           newHomeName={changeHomeData.newHomeName}
           onConfirm={handleConfirmChangeHome}
