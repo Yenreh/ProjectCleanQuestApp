@@ -44,7 +44,7 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
   // Step A: Create Home
   const [homeName, setHomeName] = useState("");
   const [memberCount, setMemberCount] = useState("2");
-  const [selectedZones, setSelectedZones] = useState<string[]>(["cocina", "sala", "baño"]);
+  const [selectedZones, setSelectedZones] = useState<string[]>([]);
   const [reminderTime, setReminderTime] = useState("09:00");
 
   // Step B: Roommates
@@ -72,10 +72,18 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
     try {
       const zonePresets = await db.getZonePresets();
       setZones(zonePresets);
+      // Set initial selected zones to first 3
+      if (selectedZones.length === 0 && zonePresets.length > 0) {
+        setSelectedZones(zonePresets.slice(0, 3));
+      }
     } catch (error) {
       console.error('Error loading zone presets:', error);
-      // Fallback to hardcoded zones
-      setZones(["cocina", "sala", "baño", "habitaciones", "entrada"]);
+      // Fallback to default zones with proper capitalization
+      const fallbackZones = ["Cocina", "Sala", "Baño", "Habitaciones", "Entrada"];
+      setZones(fallbackZones);
+      if (selectedZones.length === 0) {
+        setSelectedZones(fallbackZones.slice(0, 3));
+      }
     }
   }, []);
 

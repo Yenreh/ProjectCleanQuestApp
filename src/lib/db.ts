@@ -2338,7 +2338,7 @@ export const db = {
   
   async getZonePresets(): Promise<string[]> {
     if (!supabase) {
-      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+      return ["Cocina", "Sala", "Baño", "Habitaciones", "Entrada"];
     }
     
     try {
@@ -2353,11 +2353,11 @@ export const db = {
         return data.map((z: any) => z.name);
       }
       
-      // Fallback to hardcoded zones
-      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+      // Fallback to default zones with proper capitalization
+      return ["Cocina", "Sala", "Baño", "Habitaciones", "Entrada"];
     } catch (error) {
       console.error('Error loading zone presets:', error);
-      return ["cocina", "sala", "baño", "habitaciones", "entrada"];
+      return ["Cocina", "Sala", "Baño", "Habitaciones", "Entrada"];
     }
   },
 
