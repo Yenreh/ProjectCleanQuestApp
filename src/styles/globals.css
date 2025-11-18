@@ -187,3 +187,51 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Toast improvements - prevent overlapping */
+[data-sonner-toaster] {
+  --width: 356px;
+  --toast-gap: 12px;
+}
+
+[data-sonner-toaster][data-y-position='top'] {
+  top: 16px;
+}
+
+[data-sonner-toaster][data-y-position='bottom'] {
+  bottom: 16px;
+}
+
+[data-sonner-toast] {
+  margin-bottom: var(--toast-gap);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 200ms ease-out;
+}
+
+[data-sonner-toast]:not(:last-child) {
+  margin-bottom: var(--toast-gap);
+}
+
+/* Ensure toasts stack properly without visual overlap */
+[data-sonner-toast][data-styled='true'] {
+  padding: 16px;
+  gap: 8px;
+}
+
+/* Improve toast visibility */
+[data-sonner-toast][data-type='success'] {
+  border-left: 3px solid #10b981;
+}
+
+[data-sonner-toast][data-type='error'] {
+  border-left: 3px solid #ef4444;
+}
+
+[data-sonner-toast][data-type='info'] {
+  border-left: 3px solid #3b82f6;
+}
+
+[data-sonner-toast][data-type='warning'] {
+  border-left: 3px solid #f59e0b;
+}

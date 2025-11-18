@@ -35,12 +35,21 @@ CREATE TABLE IF NOT EXISTS zones (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabla de zonas predefinidas (catálogo para onboarding)
+CREATE TABLE IF NOT EXISTS zone_presets (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  icon TEXT NOT NULL,
+  display_order INTEGER DEFAULT 0
+);
+
 -- Tabla de miembros del hogar
 CREATE TABLE IF NOT EXISTS home_members (
   id SERIAL PRIMARY KEY,
   home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
+  full_name TEXT,
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'inactive')),
   invitation_token TEXT,

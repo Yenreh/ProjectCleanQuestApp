@@ -194,17 +194,10 @@ export default function App() {
           
           setMasteryLevel(newLevel);
           
-          // Update level in database if changed
+          // Update level in database if changed silently
+          // No mostramos toast aquí porque ya se mostró cuando se completó la tarea
           if (previousLevel !== newLevel) {
             await db.updateMemberMasteryLevel(member.id, newLevel);
-            
-            // Check if user leveled up (not down)
-            if (checkLevelUp(previousLevel, newLevel)) {
-              const features = getLevelFeatures(newLevel);
-              toast.success(`¡Nivel desbloqueado!`, {
-                description: `Has alcanzado nuevas capacidades. Características desbloqueadas:\n${features.slice(0, 2).join('\n')}`
-              });
-            }
           }
         } else {
           // Profile says onboarding is complete but no active membership found
@@ -289,23 +282,17 @@ export default function App() {
   // Not authenticated - show auth screen
   if (!isAuthenticated) {
     return (
-      <>
-        <AuthView 
-          onSuccess={() => setIsAuthenticated(true)} 
-          invitationToken={invitationToken}
-        />
-        <Toaster />
-      </>
+      <AuthView 
+        onSuccess={() => setIsAuthenticated(true)} 
+        invitationToken={invitationToken}
+      />
     );
   }
 
   // Show onboarding if not completed
   if (!hasCompletedOnboarding) {
     return (
-      <>
-        <OnboardingView onComplete={handleOnboardingComplete} />
-        <Toaster />
-      </>
+      <OnboardingView onComplete={handleOnboardingComplete} />
     );
   }
 

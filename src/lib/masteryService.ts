@@ -21,6 +21,7 @@ interface UserStats {
 // Define requirements for each level
 // Level progression uses HYBRID system (OR logic) - meet ANY condition to level up
 // This matches the backend db.ts calculation for consistency
+// Score calculation: tasks + (weeks * 3) + (streak * 0.5) + (achievements * 2)
 const LEVEL_REQUIREMENTS: MasteryRequirements[] = [
   {
     level: 'novice',
@@ -31,29 +32,29 @@ const LEVEL_REQUIREMENTS: MasteryRequirements[] = [
   },
   {
     level: 'solver', // Early game (3-7 days)
-    minPoints: 30,        // 30 points (3 tasks @ 10pts each)
-    minAchievements: 2,   // OR 2 achievements
+    minPoints: 24,        // 8 score = ~3 tasks + 1 week
+    minAchievements: 4,   // OR 4 achievements (rarely happens early)
     minWeeksActive: 1,    // OR 1 week active
     minTasksCompleted: 3, // OR 3 tasks completed
   },
   {
     level: 'expert', // Mid-early game (1-2 weeks)
-    minPoints: 120,        // 120 points (12 tasks)
-    minAchievements: 3,    // OR 3 achievements
+    minPoints: 60,         // 20 score = ~12 tasks + 2 weeks OR 6 tasks + 1 week + 4 achievements
+    minAchievements: 10,   // OR 10 achievements (very rare)
     minWeeksActive: 2,     // OR 2 weeks active
     minTasksCompleted: 12, // OR 12 tasks completed
   },
   {
     level: 'master', // Mid-late game (3-4 weeks)
-    minPoints: 300,        // 300 points (30 tasks)
-    minAchievements: 5,    // OR 5 achievements
+    minPoints: 135,        // 45 score = ~30 tasks + 4 weeks OR various combinations
+    minAchievements: 23,   // OR 23 achievements (almost impossible, need all)
     minWeeksActive: 4,     // OR 4 weeks active
     minTasksCompleted: 30, // OR 30 tasks completed
   },
   {
-    level: 'visionary', // End game (5+ weeks)
-    minPoints: 600,        // 600 points (60 tasks)
-    minAchievements: 8,    // OR 8 achievements
+    level: 'visionary', // End game (8+ weeks)
+    minPoints: 270,        // 90 score = ~60 tasks + 8 weeks OR high combinations
+    minAchievements: 45,   // OR 45 achievements (impossible, only 23 exist)
     minWeeksActive: 8,     // OR 8 weeks active
     minTasksCompleted: 60, // OR 60 tasks completed
   },

@@ -45,8 +45,9 @@ DROP TABLE IF EXISTS task_templates CASCADE;
 
 -- 11. Tablas de zonas del hogar
 DROP TABLE IF EXISTS zones CASCADE;
+DROP TABLE IF EXISTS zone_presets CASCADE;
 
--- 13. Tablas de miembros (incluye columnas de preferencias y notificaciones)
+-- 12. Tablas de miembros (incluye columnas de preferencias y notificaciones)
 DROP TABLE IF EXISTS home_members CASCADE;
 
 -- 14. Tablas de hogares
@@ -63,13 +64,14 @@ DROP TABLE IF EXISTS change_log CASCADE;
 -- 1. scripts/01-create-tables.sql (recrear schema con todas las columnas)
 -- 2. scripts/02-seed-data.sql (cargar datos semilla)
 -- 3. scripts/03-functions.sql (crear trigger de usuarios)
--- 4. scripts/07-task-cancellations.sql (sistema de cancelación de tareas)
 -- 
 -- Los usuarios de auth.users y sus profiles se mantienen intactos.
 -- 
--- Nuevas características incluidas en 01-create-tables.sql:
+-- Características incluidas en 01-create-tables.sql:
 -- - home_members: columnas de preferencias (email_notifications, push_notifications, 
---   weekly_reports, theme, font_size, reminder_enabled, reminder_time, reminder_days)
+--   weekly_reports, theme, font_size, reminder_enabled, reminder_time, reminder_days, full_name)
 -- - task_cancellations: sistema para cancelar y redistribuir tareas
 -- - task_favorites: marcar tareas como favoritas
--- - Índices optimizados para reminders y favoritos
+-- - zone_presets: zonas predefinidas para onboarding
+-- - Índices compuestos optimizados para queries frecuentes
+-- - Índices para reminders y favoritos

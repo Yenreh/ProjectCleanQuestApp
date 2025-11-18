@@ -1759,21 +1759,21 @@ export const db = {
     
     // Level progression with hybrid requirements (OR logic - meet ANY condition):
     // NOVICE -> SOLVER: Early game (3-7 days)
-    //   - 3+ tasks OR 1+ week active OR 2+ achievements OR score >= 10
-    // SOLVER -> EXPERT: Mid-early game (1-2 weeks)
-    //   - 12+ tasks OR 2+ weeks active OR 3+ achievements OR score >= 25
+    //   - 3+ tasks OR 1+ week active OR score >= 8 (adjusted)
+    // SOLVER -> EXPERT: Mid-early game (1-2 weeks)  
+    //   - 12+ tasks OR 2+ weeks active OR score >= 20 (more strict)
     // EXPERT -> MASTER: Mid-late game (3-4 weeks)
-    //   - 30+ tasks OR 4+ weeks active OR 5+ achievements OR score >= 50
+    //   - 30+ tasks OR 4+ weeks active OR score >= 45 (more strict)
     // MASTER -> VISIONARY: End game (5+ weeks)
-    //   - 60+ tasks OR 8+ weeks active OR 8+ achievements OR score >= 100
+    //   - 60+ tasks OR 8+ weeks active OR score >= 90 (more strict)
     
-    if (totalScore >= 100 || member.tasks_completed >= 60 || member.weeks_active >= 8 || achievementsCount >= 8) {
+    if (totalScore >= 90 || member.tasks_completed >= 60 || member.weeks_active >= 8) {
       newLevel = 'visionary'
-    } else if (totalScore >= 50 || member.tasks_completed >= 30 || member.weeks_active >= 4 || achievementsCount >= 5) {
+    } else if (totalScore >= 45 || member.tasks_completed >= 30 || member.weeks_active >= 4) {
       newLevel = 'master'
-    } else if (totalScore >= 25 || member.tasks_completed >= 12 || member.weeks_active >= 2 || achievementsCount >= 3) {
+    } else if (totalScore >= 20 || member.tasks_completed >= 12 || member.weeks_active >= 2) {
       newLevel = 'expert'
-    } else if (totalScore >= 10 || member.tasks_completed >= 3 || member.weeks_active >= 1 || achievementsCount >= 2) {
+    } else if (totalScore >= 8 || member.tasks_completed >= 3 || member.weeks_active >= 1) {
       newLevel = 'solver'
     } else {
       newLevel = 'novice'

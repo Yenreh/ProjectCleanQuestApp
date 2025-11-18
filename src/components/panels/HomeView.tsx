@@ -152,6 +152,44 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
     }
   };
 
+  // Helper function to show toasts sequentially without overlap
+  const showCompletionToasts = async (memberId: number, delayOffset = 0) => {
+    const levelNames = {
+      'solver': 'Solucionador',
+      'expert': 'Experto',
+      'master': 'Maestro',
+      'visionary': 'Visionario'
+    };
+
+    // Base toast
+    toast.success('¡Tarea completada!');
+    
+    // Check for level up
+    const newLevel = await db.updateMasteryLevel(memberId);
+    let hasLevelUp = false;
+    
+    if (newLevel) {
+      hasLevelUp = true;
+      setTimeout(() => {
+        toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
+          description: 'Ahora tienes acceso a nuevas funciones',
+          duration: 4000,
+        });
+      }, 800 + delayOffset);
+    }
+    
+    // Check for unlocked achievements
+    const unlockedAchievements = await db.checkAndUnlockAchievements(memberId);
+    if (unlockedAchievements.length > 0) {
+      setTimeout(() => {
+        toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
+          description: unlockedAchievements[0].description,
+          duration: 4000,
+        });
+      }, hasLevelUp ? 1800 + delayOffset : 1000 + delayOffset);
+    }
+  };
+
   const handleCompleteTaskFromDialog = async () => {
     if (!currentTaskDialog || !currentMember) return;
 
@@ -167,35 +205,9 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
 
     try {
       await db.completeTask(currentTaskDialog.id, currentMember.id);
-      toast.success('¡Tarea completada!');
       
-      // Check for level up
-      const newLevel = await db.updateMasteryLevel(currentMember.id);
-      if (newLevel) {
-        const levelNames = {
-          'solver': 'Solucionador',
-          'expert': 'Experto',
-          'master': 'Maestro',
-          'visionary': 'Visionario'
-        };
-        setTimeout(() => {
-          toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
-            description: 'Ahora tienes acceso a nuevas funciones',
-            duration: 5000,
-          });
-        }, 500);
-      }
-      
-      // Check for unlocked achievements
-      const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
-      if (unlockedAchievements.length > 0) {
-        setTimeout(() => {
-          toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
-            description: unlockedAchievements[0].description,
-            duration: 5000,
-          });
-        }, newLevel ? 1500 : 1000);
-      }
+      // Show completion toasts sequentially
+      await showCompletionToasts(currentMember.id);
       
       setTaskDialogOpen(false);
       setCurrentTaskDialog(null);
@@ -227,35 +239,9 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
     
     try {
       await db.completeTask(assignmentId, currentMember.id);
-      toast.success('¡Tarea completada!');
       
-      // Check for level up
-      const newLevel = await db.updateMasteryLevel(currentMember.id);
-      if (newLevel) {
-        const levelNames = {
-          'solver': 'Solucionador',
-          'expert': 'Experto',
-          'master': 'Maestro',
-          'visionary': 'Visionario'
-        };
-        setTimeout(() => {
-          toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
-            description: 'Ahora tienes acceso a nuevas funciones',
-            duration: 5000,
-          });
-        }, 500);
-      }
-      
-      // Check for unlocked achievements
-      const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
-      if (unlockedAchievements.length > 0) {
-        setTimeout(() => {
-          toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
-            description: unlockedAchievements[0].description,
-            duration: 5000,
-          });
-        }, newLevel ? 1500 : 1000);
-      }
+      // Show completion toasts sequentially
+      await showCompletionToasts(currentMember.id);
       
       // Optimistic UI update: remove completed task from state
       setAssignments(prev => prev.filter(a => a.id !== assignmentId));

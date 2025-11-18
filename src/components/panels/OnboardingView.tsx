@@ -272,11 +272,13 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
       toast.success("¡Bien hecho! 🎉 Sigue así");
     } else if (firstTaskProgress === 50) {
       setFirstTaskProgress(100);
-      toast.success("¡Tarea completada! 🌟");
       
       // Mark onboarding as complete and unlock first achievement
       (async () => {
         try {
+          // Show completion toast first
+          toast.success("¡Tarea completada! 🌟");
+          
           const user = await db.getCurrentUser();
           if (user) {
             await db.markOnboardingComplete(user.id);
@@ -288,13 +290,13 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
               if (currentMember) {
                 const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
                 if (unlockedAchievements.length > 0) {
-                  // Show achievement notification
+                  // Show achievement notification after delay
                   setTimeout(() => {
                     toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
                       description: unlockedAchievements[0].description,
-                      duration: 5000,
+                      duration: 4000,
                     });
-                  }, 2000);
+                  }, 1000);
                 }
               }
             }

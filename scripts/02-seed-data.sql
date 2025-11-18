@@ -39,14 +39,7 @@ INSERT INTO achievements (name, title, description, icon, color, achievement_typ
 ON CONFLICT (name) DO NOTHING;
 
 -- ========== ZONE PRESETS (Zonas predefinidas para onboarding) ==========
--- Tabla temporal para almacenar zonas comunes que los usuarios pueden seleccionar
-CREATE TABLE IF NOT EXISTS zone_presets (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  icon TEXT NOT NULL,
-  display_order INTEGER DEFAULT 0
-);
-
+-- Insertar zonas comunes que los usuarios pueden seleccionar
 INSERT INTO zone_presets (name, icon, display_order) VALUES
   ('Cocina', 'utensils', 1),
   ('Sala', 'home', 2),
