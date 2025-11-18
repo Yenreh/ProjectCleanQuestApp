@@ -95,50 +95,62 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
 
     const isCompleted = completedStepsInDialog.has(stepId);
     
+    // Store previous states for rollback on error
+    const prevCompletedSteps = new Set(completedStepsInDialog);
+    const prevTaskDialog = currentTaskDialog;
+    
     setTogglingStepId(stepId);
+    
+    // Optimistic UI update
+    if (isCompleted) {
+      setCompletedStepsInDialog(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(stepId);
+        return newSet;
+      });
+      
+      setCurrentTaskDialog(prev => {
+        if (!prev) return prev;
+        const currentIds = (prev as any).completed_step_ids || [];
+        return {
+          ...prev,
+          completed_step_ids: currentIds.filter((id: number) => id !== stepId)
+        } as any;
+      });
+      
+      updateAssignmentProgress(currentTaskDialog.id, stepId, false);
+    } else {
+      setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
+      
+      setCurrentTaskDialog(prev => {
+        if (!prev) return prev;
+        const currentIds = (prev as any).completed_step_ids || [];
+        return {
+          ...prev,
+          completed_step_ids: [...currentIds, stepId]
+        } as any;
+      });
+      
+      updateAssignmentProgress(currentTaskDialog.id, stepId, true);
+    }
+    
     try {
+      // Persist to database
       if (isCompleted) {
         await db.uncompleteTaskStep(stepId, currentTaskDialog.id);
-        setCompletedStepsInDialog(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(stepId);
-          return newSet;
-        });
-        
-        // Update currentTaskDialog with new completed_step_ids
-        setCurrentTaskDialog(prev => {
-          if (!prev) return prev;
-          const currentIds = (prev as any).completed_step_ids || [];
-          return {
-            ...prev,
-            completed_step_ids: currentIds.filter((id: number) => id !== stepId)
-          } as any;
-        });
-        
         toast.success('Paso desmarcado');
-        // Update assignment progress when uncompleting
-        updateAssignmentProgress(currentTaskDialog.id, stepId, false);
       } else {
         await db.completeTaskStep(stepId, currentTaskDialog.id, currentMember.id);
-        setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
-        
-        // Update currentTaskDialog with new completed_step_ids
-        setCurrentTaskDialog(prev => {
-          if (!prev) return prev;
-          const currentIds = (prev as any).completed_step_ids || [];
-          return {
-            ...prev,
-            completed_step_ids: [...currentIds, stepId]
-          } as any;
-        });
-        
         toast.success('Paso completado');
-        // Update assignment progress when completing
-        updateAssignmentProgress(currentTaskDialog.id, stepId, true);
       }
     } catch (error) {
       console.error('Error toggling step:', error);
       toast.error('Error al actualizar paso');
+      
+      // Rollback on error
+      setCompletedStepsInDialog(prevCompletedSteps);
+      setCurrentTaskDialog(prevTaskDialog);
+      updateAssignmentProgress(currentTaskDialog.id, stepId, !isCompleted);
     } finally {
       setTogglingStepId(null);
     }
@@ -164,9 +176,22 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         }
       }
 
+      // Update completed_step_ids array
+      const currentCompletedIds = (assignment as any).completed_step_ids || [];
+      let newCompletedIds = [...currentCompletedIds];
+      if (stepId) {
+        if (isCompleting) {
+          if (!newCompletedIds.includes(stepId)) {
+            newCompletedIds.push(stepId);
+          }
+        } else {
+          newCompletedIds = newCompletedIds.filter(id => id !== stepId);
+        }
+      }
+
       const requiredSteps = assignment.task_steps.filter(s => !s.is_optional);
 
-      // Update only this assignment in the state
+      // Update assignment in state with all cached fields
       setAssignments(prev => prev.map(a => 
         a.id === assignmentId 
           ? {
@@ -174,7 +199,8 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
               completed_steps_count: Math.max(0, newCompletedStepsCount),
               completed_required_steps: Math.max(0, completedRequiredCount),
               total_required_steps: requiredSteps.length,
-              has_partial_progress: newCompletedStepsCount > 0
+              has_partial_progress: newCompletedStepsCount > 0,
+              completed_step_ids: newCompletedIds
             } as any
           : a
       ));
@@ -235,16 +261,12 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
       return;
     }
 
+    // Store for rollback
+    const prevAssignments = assignments;
+    const prevMetrics = metrics;
+    const taskToComplete = currentTaskDialog;
+
     try {
-      await db.completeTask(currentTaskDialog.id, currentMember.id);
-      
-      // Show completion toasts sequentially
-      await showCompletionToasts(currentMember.id);
-      
-      setTaskDialogOpen(false);
-      setCurrentTaskDialog(null);
-      setCompletedStepsInDialog(new Set());
-      
       // Optimistic UI update: remove completed task from state
       setAssignments(prev => prev.filter(a => a.id !== currentTaskDialog.id));
       
@@ -256,25 +278,40 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         completion_percentage: Math.round(((prev.completed_tasks + 1) / prev.total_tasks) * 100)
       } : null);
       
-      // Reload only metrics in background (lightweight query)
+      // Close dialog immediately for better UX
+      setTaskDialogOpen(false);
+      setCurrentTaskDialog(null);
+      setCompletedStepsInDialog(new Set());
+      
+      // Persist to database
+      await db.completeTask(taskToComplete.id, currentMember.id);
+      
+      // Show completion toasts sequentially
+      await showCompletionToasts(currentMember.id);
+      
+      // Reload metrics in background for accuracy
       if (homeId) {
         db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
       }
     } catch (error) {
       console.error('Error completing task:', error);
       toast.error('Error al completar tarea');
+      
+      // Rollback on error
+      setAssignments(prevAssignments);
+      setMetrics(prevMetrics);
+      setCurrentTaskDialog(taskToComplete);
     }
   };
 
   const handleCompleteTask = async (assignmentId: number) => {
     if (!currentMember) return;
     
+    // Store for rollback
+    const prevAssignments = assignments;
+    const prevMetrics = metrics;
+    
     try {
-      await db.completeTask(assignmentId, currentMember.id);
-      
-      // Show completion toasts sequentially
-      await showCompletionToasts(currentMember.id);
-      
       // Optimistic UI update: remove completed task from state
       setAssignments(prev => prev.filter(a => a.id !== assignmentId));
       
@@ -286,13 +323,23 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         completion_percentage: Math.round(((prev.completed_tasks + 1) / prev.total_tasks) * 100)
       } : null);
       
-      // Reload only metrics in background (lightweight query)
+      // Persist to database
+      await db.completeTask(assignmentId, currentMember.id);
+      
+      // Show completion toasts sequentially
+      await showCompletionToasts(currentMember.id);
+      
+      // Reload metrics in background for accuracy
       if (homeId) {
         db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
       }
     } catch (error) {
       console.error('Error completing task:', error);
       toast.error('Error al completar tarea');
+      
+      // Rollback on error
+      setAssignments(prevAssignments);
+      setMetrics(prevMetrics);
     }
   };
 
@@ -300,25 +347,36 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
     if (!currentMember || togglingFavoriteId) return;
 
     const isFavorite = favoriteTasks.has(taskId);
+    const prevFavorites = new Set(favoriteTasks);
     
     setTogglingFavoriteId(taskId);
+    
+    // Optimistic UI update
+    if (isFavorite) {
+      setFavoriteTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+    } else {
+      setFavoriteTasks(prev => new Set([...prev, taskId]));
+    }
+    
     try {
+      // Persist to database
       if (isFavorite) {
         await db.removeTaskFavorite(taskId, currentMember.id);
-        setFavoriteTasks(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
         toast.success('Quitado de favoritos');
       } else {
         await db.addTaskFavorite(taskId, currentMember.id);
-        setFavoriteTasks(prev => new Set([...prev, taskId]));
         toast.success('Agregado a favoritos');
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      toast.error('Error al actualizar favoritos');
+      toast.error('Error al actualizar favorito');
+      
+      // Rollback on error
+      setFavoriteTasks(prevFavorites);
     } finally {
       setTogglingFavoriteId(null);
     }

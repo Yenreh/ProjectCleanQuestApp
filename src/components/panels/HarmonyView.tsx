@@ -51,14 +51,30 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
   const handleUpdateGoal = async () => {
     if (!homeId || isUpdatingGoal) return;
     
+    // Store for rollback
+    const prevGoal = goalPercentage;
+    const prevHome = home;
+    
     setIsUpdatingGoal(true);
     try {
+      // Optimistic update
+      if (home) {
+        setHome({ ...home, goal_percentage: parseInt(goalPercentage) });
+      }
+      
+      // Persist to database
       await db.updateHome(homeId, { goal_percentage: parseInt(goalPercentage) });
       toast.success('Meta actualizada');
-      await loadData(); // Recargar datos
+      
+      // Reload for accuracy
+      await loadData();
     } catch (error) {
       console.error('Error updating goal:', error);
       toast.error('Error al actualizar meta');
+      
+      // Rollback on error
+      setGoalPercentage(prevGoal);
+      setHome(prevHome);
     } finally {
       setIsUpdatingGoal(false);
     }
@@ -67,17 +83,39 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
   const handleUpdateRotation = async () => {
     if (!homeId || isUpdatingRotation) return;
     
+    // Store for rollback
+    const prevRotationPolicy = rotationPolicy;
+    const prevAutoRotation = autoRotation;
+    const prevHome = home;
+    
     setIsUpdatingRotation(true);
     try {
+      // Optimistic update
+      if (home) {
+        setHome({ 
+          ...home, 
+          rotation_policy: rotationPolicy as any,
+          auto_rotation: autoRotation 
+        });
+      }
+      
+      // Persist to database
       await db.updateHome(homeId, { 
         rotation_policy: rotationPolicy as any,
         auto_rotation: autoRotation 
       });
       toast.success('Política de rotación actualizada');
-      await loadData(); // Recargar datos
+      
+      // Reload for accuracy
+      await loadData();
     } catch (error) {
       console.error('Error updating rotation:', error);
       toast.error('Error al actualizar rotación');
+      
+      // Rollback on error
+      setRotationPolicy(prevRotationPolicy);
+      setAutoRotation(prevAutoRotation);
+      setHome(prevHome);
     } finally {
       setIsUpdatingRotation(false);
     }

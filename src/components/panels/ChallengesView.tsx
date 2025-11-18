@@ -59,7 +59,18 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   const handleJoinChallenge = async (challengeId: number) => {
     if (!currentMember) return;
     
+    // Store for rollback
+    const prevChallenges = challenges;
+    
     try {
+      // Optimistic update: update UI immediately
+      setChallenges(prev => prev.map(c => 
+        c.id === challengeId 
+          ? { ...c, participant_count: c.participant_count + 1 }
+          : c
+      ));
+      
+      // Persist to database
       await db.joinChallenge(challengeId, currentMember.id);
       toast.success('¡Te has unido al desafío!');
       
@@ -74,10 +85,14 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
         }, 1000);
       }
       
+      // Reload for accuracy
       await loadData();
     } catch (error) {
       console.error('Error joining challenge:', error);
       toast.error('Error al unirse al desafío');
+      
+      // Rollback on error
+      setChallenges(prevChallenges);
     }
   };
 
@@ -109,13 +124,33 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   const handleVote = async (proposalId: number, vote: boolean) => {
     if (!currentMember) return;
     
+    // Store for rollback
+    const prevProposals = proposals;
+    
     try {
+      // Optimistic update
+      setProposals(prev => prev.map(p => 
+        p.id === proposalId
+          ? {
+              ...p,
+              votes_yes: vote ? p.votes_yes + 1 : p.votes_yes,
+              votes_no: !vote ? p.votes_no + 1 : p.votes_no
+            }
+          : p
+      ));
+      
+      // Persist to database
       await db.voteProposal(proposalId, currentMember.id, vote);
       toast.success(vote ? 'Voto a favor registrado' : 'Voto en contra registrado');
+      
+      // Reload for accuracy
       await loadData();
     } catch (error) {
       console.error('Error voting:', error);
       toast.error('Error al votar');
+      
+      // Rollback on error
+      setProposals(prevProposals);
     }
   };
 

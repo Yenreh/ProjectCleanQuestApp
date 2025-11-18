@@ -68,11 +68,19 @@ export function ProfileSettingsDialog({
       return;
     }
     
+    // Store for rollback
+    const prevName = name;
+    const prevEmail = email;
+    
     setIsLoading(true);
     try {
+      // Persist to database
       await db.updateMemberProfile(currentMember.id, name.trim(), email.trim());
       toast.success("Perfil actualizado correctamente");
+      
+      // Notify parent to refresh
       onUpdate?.();
+      
       // Give a moment for the update to propagate
       setTimeout(() => {
         setIsLoading(false);
@@ -80,6 +88,10 @@ export function ProfileSettingsDialog({
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error("Error al actualizar perfil");
+      
+      // Rollback on error
+      setName(prevName);
+      setEmail(prevEmail);
       setIsLoading(false);
     }
   };

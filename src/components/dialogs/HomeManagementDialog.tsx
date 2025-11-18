@@ -252,15 +252,27 @@ export function HomeManagementDialog({
   const handleDeleteTask = async (taskId: number) => {
     if (!confirm('¿Eliminar esta tarea? Se eliminará de todas las asignaciones.')) return;
 
+    // Store for rollback
+    const prevTasks = tasks;
+    
     setIsLoading(true);
     try {
+      // Optimistic update
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      
+      // Persist to database
       await db.deleteTask(taskId);
       toast.success('Tarea eliminada');
+      
+      // Reload and notify parent
       await loadData();
       onUpdate?.();
     } catch (error) {
       console.error('Error deleting task:', error);
       toast.error('Error al eliminar tarea');
+      
+      // Rollback on error
+      setTasks(prevTasks);
     } finally {
       setIsLoading(false);
     }
@@ -319,15 +331,27 @@ export function HomeManagementDialog({
   const handleDeleteZone = async (zoneId: number) => {
     if (!confirm('¿Eliminar esta zona? Las tareas asociadas perderán su zona.')) return;
 
+    // Store for rollback
+    const prevZones = zones;
+    
     setIsLoading(true);
     try {
+      // Optimistic update
+      setZones(prev => prev.filter(z => z.id !== zoneId));
+      
+      // Persist to database
       await db.deleteZone(zoneId);
       toast.success('Zona eliminada');
+      
+      // Reload and notify parent
       await loadData();
       onUpdate?.();
     } catch (error) {
       console.error('Error deleting zone:', error);
       toast.error('Error al eliminar zona');
+      
+      // Rollback on error
+      setZones(prevZones);
     } finally {
       setIsLoading(false);
     }
@@ -377,14 +401,28 @@ export function HomeManagementDialog({
   };
 
   const handleUpdateMemberRole = async (memberId: number, newRole: MemberRole) => {
+    // Store for rollback
+    const prevMembers = members;
+    
     setIsLoading(true);
     try {
+      // Optimistic update
+      setMembers(prev => prev.map(m => 
+        m.id === memberId ? { ...m, role: newRole } : m
+      ));
+      
+      // Persist to database
       await db.updateMember(memberId, { role: newRole });
       toast.success('Rol actualizado');
+      
+      // Reload for accuracy
       await loadData();
     } catch (error) {
       console.error('Error updating role:', error);
       toast.error('Error al actualizar rol');
+      
+      // Rollback on error
+      setMembers(prevMembers);
     } finally {
       setIsLoading(false);
     }
@@ -398,16 +436,30 @@ export function HomeManagementDialog({
   const handleConfirmRemoveMember = async () => {
     if (!memberToRemove) return;
 
+    // Store for rollback
+    const prevMembers = members;
+    
     setIsLoading(true);
     try {
+      // Optimistic update
+      setMembers(prev => prev.filter(m => m.id !== memberToRemove.id));
+      setShowRemoveConfirm(false);
+      
+      // Persist to database
       await db.removeMember(memberToRemove.id);
       toast.success('Miembro removido del hogar');
-      setShowRemoveConfirm(false);
+      
       setMemberToRemove(null);
+      
+      // Reload for accuracy
       await loadData();
     } catch (error) {
       console.error('Error removing member:', error);
       toast.error('Error al remover miembro');
+      
+      // Rollback on error
+      setMembers(prevMembers);
+      setShowRemoveConfirm(true);
     } finally {
       setIsLoading(false);
     }
@@ -452,8 +504,15 @@ export function HomeManagementDialog({
       return;
     }
 
+    // Store for rollback
+    const prevHomeName = homeName;
+    const prevGroupGoal = groupGoal;
+    const prevRotationPolicy = rotationPolicy;
+    const prevRotationEnabled = rotationEnabled;
+    
     setIsLoading(true);
     try {
+      // Persist to database
       await db.updateHome(homeId, {
         name: homeName,
         goal_percentage: groupGoal,
@@ -461,10 +520,18 @@ export function HomeManagementDialog({
         auto_rotation: rotationEnabled
       });
       toast.success('Configuración actualizada');
+      
+      // Notify parent to refresh
       onUpdate?.();
     } catch (error) {
       console.error('Error updating home config:', error);
       toast.error('Error al actualizar configuración');
+      
+      // Rollback on error
+      setHomeName(prevHomeName);
+      setGroupGoal(prevGroupGoal);
+      setRotationPolicy(prevRotationPolicy);
+      setRotationEnabled(prevRotationEnabled);
     } finally {
       setIsLoading(false);
     }
