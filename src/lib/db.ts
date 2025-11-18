@@ -416,6 +416,38 @@ export const db = {
     return data;
   },
 
+  async getActiveInvitations(homeId: string) {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    const { data, error } = await supabase
+      .from('home_members')
+      .select('*')
+      .eq('home_id', homeId)
+      .eq('status', 'pending')
+      .not('invitation_token', 'is', null)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Add invite link to each invitation
+    return data.map(invitation => ({
+      ...invitation,
+      invite_link: `${window.location.origin}?invite=${invitation.invitation_token}`
+    }));
+  },
+
+  async cancelInvitation(invitationId: string) {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    const { error } = await supabase
+      .from('home_members')
+      .delete()
+      .eq('id', invitationId)
+      .eq('status', 'pending');
+    
+    if (error) throw error;
+  },
+
   async changeHome(userId: string, newHomeToken: string) {
     if (!supabase) throw new Error('Supabase not configured');
 

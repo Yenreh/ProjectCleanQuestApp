@@ -27,7 +27,8 @@ import {
   Crown,
   Shield,
   User as UserIcon,
-  Link2
+  Link2,
+  Key
 } from "lucide-react";
 import {
   Select,
@@ -87,6 +88,10 @@ export function HomeManagementDialog({
   const [editMemberRole, setEditMemberRole] = useState<MemberRole>("member");
   const [memberToRemove, setMemberToRemove] = useState<HomeMember | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  
+  // Active invitations state
+  const [activeInvitations, setActiveInvitations] = useState<any[]>([]);
+  const [loadingInvitations, setLoadingInvitations] = useState(false);
 
   // Home config state
   const [homeName, setHomeName] = useState(currentHome?.name || "");
@@ -123,6 +128,9 @@ export function HomeManagementDialog({
       setTasks(homeTasks);
       setZones(homeZones);
       setMembers(homeMembers);
+      
+      // Load active invitations
+      await loadInvitations();
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error al cargar datos');
@@ -130,6 +138,20 @@ export function HomeManagementDialog({
       setIsLoading(false);
     }
   }, [homeId]);
+
+  const loadInvitations = async () => {
+    if (!homeId) return;
+    
+    setLoadingInvitations(true);
+    try {
+      const invitations = await db.getActiveInvitations(homeId.toString());
+      setActiveInvitations(invitations);
+    } catch (error) {
+      console.error('Error loading invitations:', error);
+    } finally {
+      setLoadingInvitations(false);
+    }
+  };
 
   // Task handlers
   const handleOpenTaskForm = async (task?: Task) => {
@@ -372,6 +394,9 @@ export function HomeManagementDialog({
     setInviteEmail("");
     setInviteRole("member");
     setGeneratedInviteLink(null);
+    
+    // Reload invitations to show updated list
+    loadInvitations();
   };
 
   const handleInviteMember = async () => {
@@ -390,6 +415,9 @@ export function HomeManagementDialog({
         toast.success('Invitación creada', {
           description: 'Ahora puedes copiar el link o compartirlo directamente'
         });
+        
+        // Reload invitations to show the new one
+        await loadInvitations();
       } else {
         toast.success('Invitación enviada');
         handleCancelInviteForm();
@@ -414,7 +442,7 @@ export function HomeManagementDialog({
   const handleShareInviteLink = async () => {
     if (!generatedInviteLink) return;
 
-    if (navigator.share) {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
           title: `Únete a ${currentHome?.name || 'nuestro hogar'} en CleanQuest`,
@@ -431,6 +459,29 @@ export function HomeManagementDialog({
     } else {
       // Fallback: just copy to clipboard
       handleCopyInviteLink();
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    // Store for rollback
+    const prevInvitations = activeInvitations;
+    
+    setLoadingInvitations(true);
+    try {
+      // Optimistic update
+      setActiveInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      
+      // Persist to database
+      await db.cancelInvitation(invitationId);
+      toast.success('Invitación cancelada');
+    } catch (error) {
+      console.error('Error canceling invitation:', error);
+      toast.error('Error al cancelar invitación');
+      
+      // Rollback on error
+      setActiveInvitations(prevInvitations);
+    } finally {
+      setLoadingInvitations(false);
     }
   };
 
@@ -1183,6 +1234,80 @@ export function HomeManagementDialog({
                     )}
                   </div>
                 </Card>
+              )}
+              
+              {/* Active Invitations Section */}
+              {!showInviteForm && !editingMember && activeInvitations.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-medium">Invitaciones Pendientes</h4>
+                    <Badge variant="secondary" className="text-xs">
+                      {activeInvitations.length}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {loadingInvitations ? (
+                      <Card className="p-4 text-center">
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto text-muted-foreground" />
+                      </Card>
+                    ) : (
+                      activeInvitations.map((invitation) => (
+                        <Card key={invitation.id} className="p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{invitation.email}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {invitation.role === 'admin' ? 'Admin' : 'Miembro'}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(invitation.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(invitation.invite_link);
+                                  toast.success('Link completo copiado');
+                                }}
+                                title="Copiar link completo"
+                              >
+                                <Link2 className="w-3 h-3 text-blue-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(invitation.invitation_token);
+                                  toast.success('Token copiado');
+                                }}
+                                title="Copiar solo el token"
+                              >
+                                <Key className="w-3 h-3 text-green-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleCancelInvitation(invitation.id)}
+                                disabled={loadingInvitations}
+                                title="Cancelar invitación"
+                              >
+                                <Trash2 className="w-3 h-3 text-red-500" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </TabsContent>
