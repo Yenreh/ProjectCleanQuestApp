@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card } from "../ui/card"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -20,13 +20,7 @@ export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
   const [loading, setLoading] = useState(false)
   const [invitationInfo, setInvitationInfo] = useState<any>(null)
 
-  useEffect(() => {
-    if (invitationToken) {
-      loadInvitationInfo();
-    }
-  }, [invitationToken]);
-
-  const loadInvitationInfo = async () => {
+  const loadInvitationInfo = useCallback(async () => {
     if (!invitationToken) return;
     
     try {
@@ -40,7 +34,13 @@ export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
     } catch (error) {
       console.error('Error loading invitation:', error);
     }
-  };
+  }, [invitationToken]);
+
+  useEffect(() => {
+    if (invitationToken) {
+      loadInvitationInfo();
+    }
+  }, [invitationToken, loadInvitationInfo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

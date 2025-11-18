@@ -52,9 +52,68 @@
     build: {
       target: 'esnext',
       outDir: 'build',
+      // OPTIMIZATION: Enable code splitting and chunk optimization
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Vendor chunk for React and core libraries
+            'react-vendor': ['react', 'react-dom', 'react/jsx-runtime'],
+            // UI components chunk
+            'ui-vendor': [
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-dropdown-menu',
+              '@radix-ui/react-select',
+              '@radix-ui/react-tabs',
+              '@radix-ui/react-progress',
+              '@radix-ui/react-avatar',
+              '@radix-ui/react-popover',
+              '@radix-ui/react-scroll-area'
+            ],
+            // Icons chunk
+            'icons': ['lucide-react'],
+            // Supabase chunk
+            'supabase': ['@supabase/supabase-js'],
+          },
+          // Optimize chunk naming
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]'
+        }
+      },
+      // Optimize build size
+      minify: 'esbuild',
+      cssMinify: true,
+      // Chunk size warnings
+      chunkSizeWarningLimit: 1000,
+      // Enable source maps for production debugging (optional)
+      sourcemap: false,
     },
+    // OPTIMIZATION: Optimize dev server performance
     server: {
       port: 3000,
       open: true,
+      // Enable HMR optimizations
+      hmr: {
+        overlay: true
+      },
+      // Warm up frequently used files
+      warmup: {
+        clientFiles: [
+          './src/App.tsx',
+          './src/components/panels/HomeView.tsx',
+          './src/lib/db.ts',
+        ]
+      }
     },
+    // OPTIMIZATION: Dependency optimization
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        '@supabase/supabase-js',
+        'lucide-react',
+        'sonner'
+      ],
+      exclude: []
+    }
   });

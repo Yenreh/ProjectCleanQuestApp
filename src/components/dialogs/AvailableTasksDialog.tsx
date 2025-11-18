@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -33,13 +33,7 @@ export function AvailableTasksDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [takingTaskId, setTakingTaskId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      loadTasks();
-    }
-  }, [open, homeId]);
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     setIsLoading(true);
     try {
       const availableTasks = await db.getAvailableCancelledTasks(homeId);
@@ -50,7 +44,13 @@ export function AvailableTasksDialog({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeId]);
+
+  useEffect(() => {
+    if (open) {
+      loadTasks();
+    }
+  }, [open, homeId, loadTasks]);
 
   const handleTakeTask = async (cancellationId: number, taskId: number, taskTitle: string) => {
     const uniqueId = cancellationId === 0 ? `unassigned-${taskId}` : `cancelled-${cancellationId}`;

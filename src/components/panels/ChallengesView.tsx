@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -28,13 +28,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   const [proposalTitle, setProposalTitle] = useState("");
   const [hypothesis, setHypothesis] = useState("");
 
-  useEffect(() => {
-    if (currentMember && homeId) {
-      loadData();
-    }
-  }, [currentMember, homeId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!homeId || !currentMember) return;
     
     setIsLoading(true);
@@ -54,7 +48,13 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeId, currentMember]);
+
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId, loadData]);
 
   const handleJoinChallenge = async (challengeId: number) => {
     if (!currentMember) return;

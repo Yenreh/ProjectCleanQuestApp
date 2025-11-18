@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -43,10 +43,15 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
   const [autoRotation, setAutoRotation] = useState(true);
   const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [nextCycleOpen, setNextCycleOpen] = useState(false);
+  
+  // Loading states for actions
+  const [isUpdatingGoal, setIsUpdatingGoal] = useState(false);
+  const [isUpdatingRotation, setIsUpdatingRotation] = useState(false);
 
   const handleUpdateGoal = async () => {
-    if (!homeId) return;
+    if (!homeId || isUpdatingGoal) return;
     
+    setIsUpdatingGoal(true);
     try {
       await db.updateHome(homeId, { goal_percentage: parseInt(goalPercentage) });
       toast.success('Meta actualizada');
@@ -54,12 +59,15 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     } catch (error) {
       console.error('Error updating goal:', error);
       toast.error('Error al actualizar meta');
+    } finally {
+      setIsUpdatingGoal(false);
     }
   };
 
   const handleUpdateRotation = async () => {
-    if (!homeId) return;
+    if (!homeId || isUpdatingRotation) return;
     
+    setIsUpdatingRotation(true);
     try {
       await db.updateHome(homeId, { 
         rotation_policy: rotationPolicy as any,
@@ -70,16 +78,12 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     } catch (error) {
       console.error('Error updating rotation:', error);
       toast.error('Error al actualizar rotación');
+    } finally {
+      setIsUpdatingRotation(false);
     }
   };
 
-  useEffect(() => {
-    if (currentMember && homeId) {
-      loadData();
-    }
-  }, [currentMember, homeId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!homeId || !currentMember) return;
     
     setIsLoading(true);
@@ -121,7 +125,13 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeId, currentMember, masteryLevel]);
+
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId, loadData]);
 
   const loadChangeLog = async () => {
     if (!homeId) return;
@@ -243,8 +253,16 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
                   size="sm" 
                   className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
                   onClick={handleUpdateGoal}
+                  disabled={isUpdatingGoal}
                 >
-                  Guardar meta
+                  {isUpdatingGoal ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar meta'
+                  )}
                 </Button>
               </div>
             </Card>
@@ -277,8 +295,16 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
                   size="sm" 
                   className="w-full bg-[#d4a574] hover:bg-[#c49565]"
                   onClick={handleUpdateRotation}
+                  disabled={isUpdatingRotation}
                 >
-                  Guardar rotación
+                  {isUpdatingRotation ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar rotación'
+                  )}
                 </Button>
               </div>
             </Card>

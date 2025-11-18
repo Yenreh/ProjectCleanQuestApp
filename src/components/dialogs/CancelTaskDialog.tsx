@@ -9,7 +9,7 @@ import {
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { AlertCircle, X } from "lucide-react";
+import { AlertCircle, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "../../lib/db";
 import type { AssignmentWithDetails } from "../../lib/types";
@@ -130,7 +130,14 @@ export function CancelTaskDialog({
             }}
             className="hover:opacity-90 transition-opacity"
           >
-            {isSubmitting ? "Cancelando..." : "Confirmar cancelación"}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Cancelando...
+              </>
+            ) : (
+              'Confirmar cancelación'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

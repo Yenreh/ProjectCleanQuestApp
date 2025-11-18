@@ -323,6 +323,26 @@ CREATE INDEX IF NOT EXISTS idx_cancellations_available ON task_cancellations(is_
 CREATE INDEX IF NOT EXISTS idx_cancellations_assignment ON task_cancellations(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_cancellations_cancelled_by ON task_cancellations(cancelled_by);
 
+-- ========== ÍNDICES COMPUESTOS CRÍTICOS PARA PERFORMANCE ==========
+-- Estos índices compuestos optimizan las queries más frecuentes de la aplicación
+
+-- CRÍTICO: Optimiza getMyAssignments (query más frecuente - se ejecuta en cada F5)
+-- Cubre: WHERE member_id = X AND status = 'pending' ORDER BY assigned_date DESC
+CREATE INDEX IF NOT EXISTS idx_task_assignments_member_status_date 
+  ON task_assignments(member_id, status, assigned_date DESC)
+  WHERE status = 'pending';
+
+-- CRÍTICO: Optimiza batch loading de step completions (elimina N+1 queries)
+-- Cubre: WHERE assignment_id IN (...) - usado en getMyAssignments
+CREATE INDEX IF NOT EXISTS idx_step_completions_assignment_step 
+  ON task_step_completions(assignment_id, step_id);
+
+-- IMPORTANTE: Optimiza filtrado de tareas activas por home
+-- Cubre: WHERE home_id = X AND is_active = TRUE
+CREATE INDEX IF NOT EXISTS idx_tasks_home_active 
+  ON tasks(home_id, is_active)
+  WHERE is_active = TRUE;
+
 -- Función para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

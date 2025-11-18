@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
@@ -48,13 +48,7 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
   const [activeTab, setActiveTab] = useState("overview");
   const [availableTasksOpen, setAvailableTasksOpen] = useState(false);
   
-  useEffect(() => {
-    if (currentMember && homeId) {
-      loadData();
-    }
-  }, [currentMember, homeId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!homeId || !currentMember) return;
     
     setIsLoading(true);
@@ -92,7 +86,13 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeId, currentMember, masteryLevel]);
+
+  useEffect(() => {
+    if (currentMember && homeId) {
+      loadData();
+    }
+  }, [currentMember, homeId, loadData]);
 
   const loadEffortBreakdown = async () => {
     if (!homeId) return;
@@ -122,9 +122,9 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
     if (!homeId) return;
     
     try {
-      // Get data for the last 3 weeks
-      const trends: WeeklyTrend[] = [];
+      // OPTIMIZATION: Get data for the last 3 weeks in PARALLEL instead of sequential
       const today = new Date();
+      const weekPromises = [];
       
       for (let i = 2; i >= 0; i--) {
         const weekEnd = new Date(today);
@@ -132,18 +132,19 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
         const weekStart = new Date(weekEnd);
         weekStart.setDate(weekStart.getDate() - 6);
         
-        const percentage = await db.calculateRotationPercentage(
-          homeId,
-          weekStart.toISOString().split('T')[0],
-          weekEnd.toISOString().split('T')[0]
+        weekPromises.push(
+          db.calculateRotationPercentage(
+            homeId,
+            weekStart.toISOString().split('T')[0],
+            weekEnd.toISOString().split('T')[0]
+          ).then(percentage => ({
+            week: i === 0 ? 'Semana actual' : `Hace ${i} semana${i > 1 ? 's' : ''}`,
+            percentage: 100 - percentage // Invertir para mostrar completitud
+          }))
         );
-        
-        trends.push({
-          week: i === 0 ? 'Semana actual' : `Hace ${i} semana${i > 1 ? 's' : ''}`,
-          percentage: 100 - percentage // Invertir para mostrar completitud
-        });
       }
       
+      const trends = await Promise.all(weekPromises);
       setWeeklyTrend(trends);
     } catch (error) {
       console.error('Error loading weekly trend:', error);

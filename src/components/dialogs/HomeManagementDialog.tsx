@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -107,7 +107,7 @@ export function HomeManagementDialog({
     }
   }, [currentHome]);
 
-  const loadData = async () => {
+    const loadData = useCallback(async () => {
     if (!homeId) return;
     
     setIsLoading(true);
@@ -127,7 +127,7 @@ export function HomeManagementDialog({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeId]);
 
   // Task handlers
   const handleOpenTaskForm = async (task?: Task) => {
@@ -204,32 +204,36 @@ export function HomeManagementDialog({
       if (editingTask) {
         await db.updateTask(editingTask.id, taskData);
         
-        // Actualizar subtareas
+        // Actualizar subtareas - OPTIMIZED: Parallel execution
         await db.deleteTaskSteps(editingTask.id);
-        for (let i = 0; i < taskSteps.length; i++) {
-          await db.createTaskStep(editingTask.id, {
-            step_order: i + 1,
-            title: taskSteps[i].title,
-            description: taskSteps[i].description,
-            is_optional: taskSteps[i].is_optional,
-            estimated_minutes: taskSteps[i].estimated_minutes
-          });
-        }
+        await Promise.all(
+          taskSteps.map((step, i) =>
+            db.createTaskStep(editingTask.id, {
+              step_order: i + 1,
+              title: step.title,
+              description: step.description,
+              is_optional: step.is_optional,
+              estimated_minutes: step.estimated_minutes
+            })
+          )
+        );
         
         toast.success('Tarea actualizada');
       } else {
         const newTask = await db.createTask(homeId, taskData);
         
-        // Crear subtareas
-        for (let i = 0; i < taskSteps.length; i++) {
-          await db.createTaskStep(newTask.id, {
-            step_order: i + 1,
-            title: taskSteps[i].title,
-            description: taskSteps[i].description,
-            is_optional: taskSteps[i].is_optional,
-            estimated_minutes: taskSteps[i].estimated_minutes
-          });
-        }
+        // Crear subtareas - OPTIMIZED: Parallel execution
+        await Promise.all(
+          taskSteps.map((step, i) =>
+            db.createTaskStep(newTask.id, {
+              step_order: i + 1,
+              title: step.title,
+              description: step.description,
+              is_optional: step.is_optional,
+              estimated_minutes: step.estimated_minutes
+            })
+          )
+        );
         
         toast.success('Tarea creada');
       }

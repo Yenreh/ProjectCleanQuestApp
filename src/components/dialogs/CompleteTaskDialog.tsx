@@ -9,7 +9,7 @@ import {
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import type { AssignmentWithDetails } from "../../lib/types";
 
 interface CompleteTaskDialogProps {
@@ -18,9 +18,10 @@ interface CompleteTaskDialogProps {
   task: AssignmentWithDetails | null;
   completedSteps: Set<number>;
   onToggleStep: (stepId: number) => void;
-  onCompleteTask: () => void;
+  onCompleteTask: () => Promise<void>;
   onClose: () => void;
   getTaskIcon: (icon?: string) => React.ReactNode;
+  togglingStepId?: number | null;
 }
 
 export function CompleteTaskDialog({
@@ -32,13 +33,25 @@ export function CompleteTaskDialog({
   onCompleteTask,
   onClose,
   getTaskIcon,
+  togglingStepId,
 }: CompleteTaskDialogProps) {
+  const [isCompleting, setIsCompleting] = useState(false);
+
   if (!task) return null;
 
   const requiredSteps = task.task_steps?.filter(s => !s.is_optional) || [];
   const requiredStepIds = new Set(requiredSteps.map(s => s.id));
   const completedRequired = Array.from(completedSteps).filter(id => requiredStepIds.has(id)).length;
   const allRequiredCompleted = requiredSteps.length === 0 || completedRequired === requiredSteps.length;
+
+  const handleComplete = async () => {
+    setIsCompleting(true);
+    try {
+      await onCompleteTask();
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -80,18 +93,22 @@ export function CompleteTaskDialog({
                   .sort((a, b) => a.step_order - b.step_order)
                   .map((step) => {
                     const isCompleted = completedSteps.has(step.id);
+                    const isToggling = togglingStepId === step.id;
                     return (
                       <button
                         key={step.id}
                         onClick={() => onToggleStep(step.id)}
+                        disabled={isToggling || isCompleting}
                         className={`w-full p-3 rounded-lg text-left transition-all ${
                           isCompleted 
                             ? 'bg-[#e9f5f0] border-2 border-[#6fbd9d]' 
                             : 'bg-[#f5f3ed] hover:bg-[#ebe9e0]'
-                        }`}
+                        } ${(isToggling || isCompleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div className="flex items-center gap-3">
-                          {isCompleted ? (
+                          {isToggling ? (
+                            <Loader2 className="w-5 h-5 animate-spin text-[#d4a574] flex-shrink-0" />
+                          ) : isCompleted ? (
                             <CheckCircle2 className="w-5 h-5 text-[#6fbd9d] flex-shrink-0" />
                           ) : (
                             <div className="w-5 h-5 rounded-full border-2 border-[#d4a574] flex-shrink-0" />
@@ -113,11 +130,18 @@ export function CompleteTaskDialog({
               </div>
 
               <Button
-                onClick={onCompleteTask}
+                onClick={handleComplete}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
-                disabled={!allRequiredCompleted}
+                disabled={!allRequiredCompleted || isCompleting}
               >
-                Marcar tarea como completada
+                {isCompleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Completando...
+                  </>
+                ) : (
+                  'Marcar tarea como completada'
+                )}
               </Button>
             </>
           ) : (
@@ -128,10 +152,18 @@ export function CompleteTaskDialog({
                 </p>
               </div>
               <Button
-                onClick={onCompleteTask}
+                onClick={handleComplete}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+                disabled={isCompleting}
               >
-                Marcar como completada
+                {isCompleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Completando...
+                  </>
+                ) : (
+                  'Marcar como completada'
+                )}
               </Button>
             </>
           )}
@@ -140,6 +172,7 @@ export function CompleteTaskDialog({
             variant="outline"
             onClick={onClose}
             className="w-full"
+            disabled={isCompleting}
           >
             Cerrar
           </Button>

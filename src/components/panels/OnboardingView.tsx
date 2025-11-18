@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
@@ -68,35 +68,35 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
   const [isCreatingTasks, setIsCreatingTasks] = useState(false);
 
   // Load zone presets from database
-  useEffect(() => {
-    const loadZones = async () => {
-      try {
-        const zonePresets = await db.getZonePresets();
-        setZones(zonePresets);
-      } catch (error) {
-        console.error('Error loading zone presets:', error);
-        // Fallback to hardcoded zones
-        setZones(["cocina", "sala", "baño", "habitaciones", "entrada"]);
-      }
-    };
-    
-    loadZones();
+  const loadZones = useCallback(async () => {
+    try {
+      const zonePresets = await db.getZonePresets();
+      setZones(zonePresets);
+    } catch (error) {
+      console.error('Error loading zone presets:', error);
+      // Fallback to hardcoded zones
+      setZones(["cocina", "sala", "baño", "habitaciones", "entrada"]);
+    }
   }, []);
 
-  // Load task templates from database
   useEffect(() => {
-    const loadTemplates = async () => {
-      try {
-        const templates = await db.getTaskTemplatesWithSteps(true);
-        setTaskTemplates(templates as TaskTemplate[]);
-      } catch (error) {
-        console.error('Error loading task templates:', error);
-        toast.error('Error al cargar plantillas de tareas');
-      }
-    };
-    
-    loadTemplates();
+    loadZones();
+  }, [loadZones]);
+
+  // Load task templates from database
+  const loadTemplates = useCallback(async () => {
+    try {
+      const templates = await db.getTaskTemplatesWithSteps(true);
+      setTaskTemplates(templates as TaskTemplate[]);
+    } catch (error) {
+      console.error('Error loading task templates:', error);
+      toast.error('Error al cargar plantillas de tareas');
+    }
   }, []);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
 
   const handleCreateHome = () => {
     if (!homeName.trim()) {
@@ -126,15 +126,14 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
         const created = await db.createHome(user.id, homeInput);
         setCreatedHomeId(created.id);
 
-        // Create selected zones in backend
-        for (const zone of selectedZones) {
-          try {
-            await db.createZone(created.id, { name: zone, icon: zone });
-          } catch (zErr) {
-            // non-fatal
-            console.warn('Zone create error', zErr);
-          }
-        }
+        // Create selected zones in backend - OPTIMIZED: Parallel execution
+        await Promise.all(
+          selectedZones.map(zone =>
+            db.createZone(created.id, { name: zone, icon: zone }).catch(zErr => {
+              console.warn('Zone create error', zErr);
+            })
+          )
+        );
 
         setCompletedSteps(prev => new Set([...prev, "create-home"]));
         toast.success("¡Casa creada, bienvenido! 🏡");
@@ -205,18 +204,16 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
         // Create tasks in backend for each selected task id
         const zones = await db.getZones(createdHomeId);
         
-        for (const tId of selectedTasks) {
+        // OPTIMIZED: Parallel task creation
+        const taskCreationPromises = selectedTasks.map(async (tId) => {
           const template = taskTemplates.find(t => t.id === tId);
-          if (!template) continue;
+          if (!template) return;
           
           const freqMap: any = { daily: 'daily', weekly: 'weekly', diario: 'daily', semanal: 'weekly' };
           const frequency = (freqMap as any)[template.frequency] || 'weekly';
           
           // Find zone_id for this task
           const matchingZone = zones.find(z => z.name === template.zone);
-          
-          // Note: We don't create task_templates here because they already exist from seed data
-          // We only create task instances for this specific home
           
           // Create task instance for this home with zone_id
           const createdTask = await db.createTask(createdHomeId, {
@@ -230,23 +227,25 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
             is_template: false
           } as any);
 
-          // Create steps for this task (copying from template)
+          // Create steps for this task (copying from template) - PARALLEL
           if (template.steps && createdTask) {
-            for (const step of template.steps) {
-              try {
-                await db.createTaskStep(createdTask.id, {
+            await Promise.all(
+              template.steps.map(step =>
+                db.createTaskStep(createdTask.id, {
                   step_order: step.step_order,
                   title: step.title,
                   description: null,
                   is_optional: step.is_optional,
                   estimated_minutes: null
-                } as any);
-              } catch (stepErr) {
-                console.warn('Task step create error', stepErr);
-              }
-            }
+                } as any).catch(stepErr => {
+                  console.warn('Task step create error', stepErr);
+                })
+              )
+            );
           }
-        }
+        });
+
+        await Promise.all(taskCreationPromises);
 
         // Trigger rotation / assignment after creating tasks
         try {
