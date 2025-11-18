@@ -75,9 +75,14 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
   const openTaskDialog = async (assignment: AssignmentWithDetails) => {
     setCurrentTaskDialog(assignment);
     
-    // Use completed step IDs that are already loaded from getMyAssignments
-    // No need to call getStepCompletions again - data is already in assignment object
-    if (assignment.task_steps && assignment.task_steps.length > 0) {
+    // Reload step completions from database to ensure fresh state
+    try {
+      const completions = await db.getStepCompletions(assignment.id);
+      const completedStepIds = completions.map((c: any) => c.step_id);
+      setCompletedStepsInDialog(new Set(completedStepIds));
+    } catch (error) {
+      console.error('Error loading step completions:', error);
+      // Fallback to cached data
       const completedStepIds = (assignment as any).completed_step_ids || [];
       setCompletedStepsInDialog(new Set(completedStepIds));
     }
@@ -99,14 +104,37 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
           newSet.delete(stepId);
           return newSet;
         });
+        
+        // Update currentTaskDialog with new completed_step_ids
+        setCurrentTaskDialog(prev => {
+          if (!prev) return prev;
+          const currentIds = (prev as any).completed_step_ids || [];
+          return {
+            ...prev,
+            completed_step_ids: currentIds.filter((id: number) => id !== stepId)
+          } as any;
+        });
+        
         toast.success('Paso desmarcado');
+        // Update assignment progress when uncompleting
+        updateAssignmentProgress(currentTaskDialog.id, stepId, false);
       } else {
         await db.completeTaskStep(stepId, currentTaskDialog.id, currentMember.id);
         setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
-        toast.success('Paso completado');
         
-        // Update the assignment progress with the newly completed step
-        updateAssignmentProgress(currentTaskDialog.id, stepId);
+        // Update currentTaskDialog with new completed_step_ids
+        setCurrentTaskDialog(prev => {
+          if (!prev) return prev;
+          const currentIds = (prev as any).completed_step_ids || [];
+          return {
+            ...prev,
+            completed_step_ids: [...currentIds, stepId]
+          } as any;
+        });
+        
+        toast.success('Paso completado');
+        // Update assignment progress when completing
+        updateAssignmentProgress(currentTaskDialog.id, stepId, true);
       }
     } catch (error) {
       console.error('Error toggling step:', error);
@@ -116,21 +144,23 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
     }
   };
 
-  const updateAssignmentProgress = async (assignmentId: number, newCompletedStepId?: number) => {
+  const updateAssignmentProgress = async (assignmentId: number, stepId?: number, isCompleting: boolean = true) => {
     try {
       const assignment = assignments.find(a => a.id === assignmentId);
       if (!assignment || !assignment.task_steps || assignment.task_steps.length === 0) return;
 
-      // Optimistic update: calculate new progress locally
+      // Calculate new progress based on action
       const currentCompletedSteps = (assignment as any).completed_steps_count || 0;
-      const newCompletedStepsCount = newCompletedStepId ? currentCompletedSteps + 1 : currentCompletedSteps;
+      const newCompletedStepsCount = stepId 
+        ? (isCompleting ? currentCompletedSteps + 1 : currentCompletedSteps - 1)
+        : currentCompletedSteps;
       
-      // For required steps, we need to check if the new step is required
+      // For required steps, we need to check if the step is required
       let completedRequiredCount = (assignment as any).completed_required_steps || 0;
-      if (newCompletedStepId) {
-        const completedStep = assignment.task_steps.find(s => s.id === newCompletedStepId);
-        if (completedStep && !completedStep.is_optional) {
-          completedRequiredCount += 1;
+      if (stepId) {
+        const step = assignment.task_steps.find(s => s.id === stepId);
+        if (step && !step.is_optional) {
+          completedRequiredCount = isCompleting ? completedRequiredCount + 1 : completedRequiredCount - 1;
         }
       }
 
@@ -141,8 +171,8 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         a.id === assignmentId 
           ? {
               ...a,
-              completed_steps_count: newCompletedStepsCount,
-              completed_required_steps: completedRequiredCount,
+              completed_steps_count: Math.max(0, newCompletedStepsCount),
+              completed_required_steps: Math.max(0, completedRequiredCount),
               total_required_steps: requiredSteps.length,
               has_partial_progress: newCompletedStepsCount > 0
             } as any
