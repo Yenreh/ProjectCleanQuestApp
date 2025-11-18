@@ -959,13 +959,13 @@ export const db = {
       .eq('id', memberId)
       .single()
     
-    // Calculate weeks active
+    // Calculate weeks active (only count completed weeks)
     let weeksActive = 0
     if (fullMember?.created_at) {
       const joinDate = new Date(fullMember.created_at)
       const now = new Date()
       const weeksDiff = Math.floor((now.getTime() - joinDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
-      weeksActive = Math.max(1, weeksDiff + 1)
+      weeksActive = weeksDiff
     }
     
     // OPTIMIZATION 4: Single update for all member stats including weeks_active
