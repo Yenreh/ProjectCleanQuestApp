@@ -9,11 +9,13 @@ import { ProfileSettingsDialog } from "./components/dialogs/ProfileSettingsDialo
 import { HomeManagementDialog } from "./components/dialogs/HomeManagementDialog";
 import { GeneralSettingsDialog } from "./components/dialogs/GeneralSettingsDialog";
 import { ChangeHomeConfirmDialog } from "./components/dialogs/ChangeHomeConfirmDialog";
-import { Home, BarChart3, Trophy, Sparkles, Settings, User, Users, ListTodo, HomeIcon, Clock, ChevronDown, LogOut } from "lucide-react";
+import { NotificationsDialog } from "./components/dialogs/NotificationsDialog";
+import { Home, BarChart3, Trophy, Sparkles, Settings, User, Users, ListTodo, HomeIcon, Clock, ChevronDown, LogOut, Bell, BellDot } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "./components/ui/button";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
+import { Badge } from "./components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +28,8 @@ import { db } from "./lib/db";
 import { calculateMasteryLevel, checkLevelUp, getLevelFeatures } from "./lib/masteryService";
 import type { MasteryLevel } from "./lib/masteryService";
 import type { Profile, Home as HomeType, HomeMember } from "./lib/types";
+import { useNotifications } from "./hooks/useNotifications";
+import { Notification, InvitationNotification } from "./lib/notifications";
 
 type Screen = "home" | "progress" | "challenges" | "harmony";
 
@@ -47,12 +51,18 @@ export default function App() {
   const [homeManagementOpen, setHomeManagementOpen] = useState(false);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
   
+  // Notifications dialog state
+  const [notificationsDialogOpen, setNotificationsDialogOpen] = useState(false);
+  const { notifications, refresh: refreshNotifications, unreadCount } = useNotifications(currentUser?.email);
+  
   // Change home confirmation dialog state
   const [showChangeHomeDialog, setShowChangeHomeDialog] = useState(false);
   const [changeHomeData, setChangeHomeData] = useState<{
+    invitationId: string;
     token: string;
-    currentHomeName: string;
+    currentHomeName: string | null;
     newHomeName: string;
+    newHomeOwner?: string;
   } | null>(null);
   const [isChangingHome, setIsChangingHome] = useState(false);
   
@@ -166,41 +176,77 @@ export default function App() {
       
       setCurrentUser(profile);
       
+      // Check if user has a pending invitation (BEFORE checking onboarding)
+      const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
+      let hasInvitation = false;
+      
+      // Check by token first (always show dialog for URL tokens)
+      if (pendingToken) {
+        try {
+          const invitationInfo = await db.getInvitationByToken(pendingToken);
+          if (invitationInfo) {
+            hasInvitation = true;
+            const { member, home } = await db.getUserHomeMembership(userId);
+            const ownerName = invitationInfo.homes.profiles?.full_name || invitationInfo.homes.profiles?.email;
+            setChangeHomeData({
+              invitationId: invitationInfo.id,
+              token: pendingToken,
+              currentHomeName: member && home ? home.name : null,
+              newHomeName: invitationInfo.homes.name,
+              newHomeOwner: ownerName
+            });
+            setShowChangeHomeDialog(true);
+            
+            // Stop here - dialog is showing, user needs to respond
+            return;
+          } else {
+            // Invalid token - clear it
+            setInvitationToken(null);
+            localStorage.removeItem('pending_invitation');
+            toast.error('El enlace de invitación no es válido o ha expirado');
+          }
+        } catch (error) {
+          console.error('Error checking invitation:', error);
+          setInvitationToken(null);
+          localStorage.removeItem('pending_invitation');
+        }
+      }
+      
+      // Check by email ONLY if user doesn't have a home yet
+      // If user has home, they'll see the notification badge instead
+      if (!hasInvitation && profile.email) {
+        const { member, home } = await db.getUserHomeMembership(userId);
+        
+        // Only auto-show dialog if user doesn't have a home
+        if (!member || !home) {
+          try {
+            const emailInvitation = await db.getPendingInvitationByEmail(profile.email);
+            if (emailInvitation && emailInvitation.invitation_token) {
+              hasInvitation = true;
+              const ownerName = emailInvitation.homes.profiles?.full_name || emailInvitation.homes.profiles?.email;
+              setChangeHomeData({
+                invitationId: emailInvitation.id,
+                token: emailInvitation.invitation_token,
+                currentHomeName: null,
+                newHomeName: emailInvitation.homes.name,
+                newHomeOwner: ownerName
+              });
+              setShowChangeHomeDialog(true);
+              
+              // Stop here - dialog is showing, user needs to respond
+              return;
+            }
+          } catch (error) {
+            console.error('Error checking email invitation:', error);
+          }
+        }
+        // If user has home, email invitations will show in notifications badge
+      }
+
       // Check onboarding status from profile
       if (profile.has_completed_onboarding) {
         // Load home membership data
         const { member, home } = await db.getUserHomeMembership(userId);
-        
-        // Check if user has a pending invitation (from localStorage or state)
-        const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
-        if (pendingToken && member && home) {
-          // User has a home and a pending invitation - show confirmation dialog
-          try {
-            const invitationInfo = await db.getInvitationByToken(pendingToken);
-            if (invitationInfo) {
-              setChangeHomeData({
-                token: pendingToken,
-                currentHomeName: home.name,
-                newHomeName: invitationInfo.homes.name
-              });
-              setShowChangeHomeDialog(true);
-            } else {
-              // Invalid token - clear it
-              setInvitationToken(null);
-              localStorage.removeItem('pending_invitation');
-              toast.error('El enlace de invitación no es válido o ha expirado');
-            }
-          } catch (error) {
-            console.error('Error checking invitation:', error);
-            setInvitationToken(null);
-            localStorage.removeItem('pending_invitation');
-          }
-          // Continue loading user data below with current home...
-        } else if (pendingToken && (!member || !home)) {
-          // User doesn't have a home but has invitation - process directly
-          await processInvitation(pendingToken, userId);
-          return; // loadUserData will be called again after processing
-        }
         
         if (member && home) {
           setHasCompletedOnboarding(true);
@@ -226,8 +272,9 @@ export default function App() {
           if (previousLevel !== newLevel) {
             await db.updateMemberMasteryLevel(member.id, newLevel);
           }
-        } else {
+        } else if (!hasInvitation) {
           // Profile says onboarding is complete but no active membership found
+          // AND no pending invitation
           // This happens when user is removed from a home
           // Force them to go through onboarding again
           setHasCompletedOnboarding(false);
@@ -276,6 +323,9 @@ export default function App() {
       
       setShowChangeHomeDialog(false);
       setChangeHomeData(null);
+      
+      // Refresh notifications and user data
+      refreshNotifications();
       await loadUserData(currentUser.id);
     } catch (error: any) {
       console.error('Error changing home:', error);
@@ -289,14 +339,34 @@ export default function App() {
     }
   };
 
-  const handleCancelChangeHome = () => {
-    // Clear token from both state and localStorage when user cancels
-    setInvitationToken(null);
-    localStorage.removeItem('pending_invitation');
-    
-    setShowChangeHomeDialog(false);
-    setChangeHomeData(null);
-    toast.info('Has permanecido en tu casa actual');
+  const handleCancelChangeHome = async () => {
+    try {
+      // Cancel the invitation in the database so it doesn't show up again
+      if (changeHomeData?.invitationId) {
+        await db.cancelInvitation(changeHomeData.invitationId);
+      }
+      
+      // Clear token from both state and localStorage when user cancels
+      setInvitationToken(null);
+      localStorage.removeItem('pending_invitation');
+      
+      setShowChangeHomeDialog(false);
+      setChangeHomeData(null);
+      toast.info('Invitación rechazada');
+      
+      // Refresh notifications
+      refreshNotifications();
+      
+      // If user has a home and completed onboarding, reload to show main app
+      if (currentUser && changeHomeData?.currentHomeName) {
+        setIsLoading(true);
+        await loadUserData(currentUser.id);
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error canceling invitation:', error);
+      toast.error('Error al rechazar la invitación');
+    }
   };
 
   async function handleOnboardingComplete() {
@@ -347,7 +417,30 @@ export default function App() {
   // Show onboarding if not completed
   if (!hasCompletedOnboarding) {
     return (
-      <OnboardingView onComplete={handleOnboardingComplete} />
+      <>
+        <OnboardingView onComplete={handleOnboardingComplete} />
+        
+        {/* Change Home Confirmation Dialog - must be rendered even during onboarding */}
+        {changeHomeData && (
+          <ChangeHomeConfirmDialog
+            open={showChangeHomeDialog}
+            onOpenChange={(open) => {
+              // Prevent closing dialog with external clicks
+              if (!open && !isChangingHome) {
+                // Only allow closing via cancel button
+                return;
+              }
+              setShowChangeHomeDialog(open);
+            }}
+            currentHomeName={changeHomeData.currentHomeName}
+            newHomeName={changeHomeData.newHomeName}
+            newHomeOwner={changeHomeData.newHomeOwner}
+            onConfirm={handleConfirmChangeHome}
+            onCancel={handleCancelChangeHome}
+            isLoading={isChangingHome}
+          />
+        )}
+      </>
     );
   }
 
@@ -387,10 +480,26 @@ export default function App() {
               )}
             </div>
             
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2">
+            {/* Right side: Notifications + User Menu */}
+            <div className="flex items-center gap-2">
+              {/* Notifications Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="relative h-9 w-9 p-0"
+                onClick={() => setNotificationsDialogOpen(true)}
+              >
+                {unreadCount > 0 ? (
+                  <BellDot className="w-5 h-5 text-red-500" />
+                ) : (
+                  <Bell className="w-5 h-5" />
+                )}
+              </Button>
+
+              {/* User Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
                   <Avatar className="w-6 h-6">
                     <AvatarFallback className="bg-[#6fbd9d] text-white text-xs">
                       {userInitials}
@@ -459,6 +568,7 @@ export default function App() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </div>
 
@@ -570,11 +680,35 @@ export default function App() {
           }}
           currentHomeName={changeHomeData.currentHomeName}
           newHomeName={changeHomeData.newHomeName}
+          newHomeOwner={changeHomeData.newHomeOwner}
           onConfirm={handleConfirmChangeHome}
           onCancel={handleCancelChangeHome}
           isLoading={isChangingHome}
         />
       )}
+
+      {/* Notifications Dialog */}
+      <NotificationsDialog
+        open={notificationsDialogOpen}
+        onOpenChange={setNotificationsDialogOpen}
+        notifications={notifications}
+        onActionClick={(notification) => {
+          if (notification.type === 'invitation') {
+            const invNotification = notification as InvitationNotification;
+            // Usar el mismo flujo que las invitaciones por token
+            setChangeHomeData({
+              invitationId: invNotification.data.invitationId,
+              token: invNotification.data.token,
+              currentHomeName: currentHome?.name || null,
+              newHomeName: invNotification.data.homeName,
+              newHomeOwner: invNotification.data.ownerName
+            });
+            setShowChangeHomeDialog(true);
+            setNotificationsDialogOpen(false);
+          }
+          // Aquí se pueden agregar más handlers para otros tipos de notificaciones
+        }}
+      />
 
       <Toaster />
     </>

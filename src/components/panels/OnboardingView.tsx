@@ -48,7 +48,7 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
   const [reminderTime, setReminderTime] = useState("09:00");
 
   // Step B: Roommates
-  const [roommates, setRoommates] = useState<Array<{ email: string; role: string; status: string }>>([]);
+  const [roommates, setRoommates] = useState<Array<{ id?: string; email: string; role: string; status: string; invite_link?: string; token?: string }>>([]);
   const [newEmail, setNewEmail] = useState("");
 
   // Step C: Tasks - Load from database
@@ -159,23 +159,63 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
     );
   };
 
-  const handleAddRoommate = () => {
+  const handleAddRoommate = async () => {
     if (!newEmail.trim() || !newEmail.includes("@")) {
       toast.error("Por favor ingresa un correo válido");
       return;
     }
-    setRoommates(prev => [...prev, { email: newEmail, role: "Miembro", status: "Pendiente" }]);
-    setNewEmail("");
-    toast.success("Invitación enviada");
+    
+    if (!createdHomeId) {
+      toast.error("Primero crea la casa para poder invitar roomies");
+      return;
+    }
+
+    try {
+      // Create invitation in database
+      const result = await db.inviteMember(createdHomeId, { 
+        email: newEmail, 
+        role: 'member' 
+      });
+      
+      // Add to local state for display
+      setRoommates(prev => [...prev, { 
+        id: result.id,
+        email: newEmail, 
+        role: "Miembro", 
+        status: "Pendiente",
+        invite_link: result.invite_link,
+        token: result.invitation_token
+      }]);
+      
+      setNewEmail("");
+      toast.success("Invitación creada");
+    } catch (error) {
+      console.error('Error creating invitation:', error);
+      toast.error('Error al crear la invitación');
+    }
   };
 
-  const handleResendInvite = (email: string) => {
-    toast.success(`Invitación reenviada a ${email}`);
+  const handleResendInvite = (roommate: any) => {
+    if (roommate.invite_link) {
+      navigator.clipboard.writeText(roommate.invite_link);
+      toast.success('Link copiado al portapapeles');
+    }
   };
 
-  const handleRemoveRoommate = (email: string) => {
-    setRoommates(prev => prev.filter(r => r.email !== email));
-    toast.info(`Invitación a ${email} eliminada`);
+  const handleRemoveRoommate = async (roommate: any) => {
+    if (roommate.id) {
+      try {
+        await db.cancelInvitation(roommate.id);
+        setRoommates(prev => prev.filter(r => r.id !== roommate.id));
+        toast.info('Invitación eliminada');
+      } catch (error) {
+        console.error('Error removing invitation:', error);
+        toast.error('Error al eliminar la invitación');
+      }
+    } else {
+      setRoommates(prev => prev.filter(r => r.email !== roommate.email));
+      toast.info('Invitación eliminada');
+    }
   };
 
   const handleCompleteRoommates = () => {
@@ -255,15 +295,50 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
 
         await Promise.all(taskCreationPromises);
 
-        // Trigger rotation / assignment after creating tasks
+        // Assign only the first task to the current user for onboarding
+        // Other tasks remain unassigned for other members to claim
         try {
-          await db.autoAssignTasks(createdHomeId, new Date());
+          const user = await db.getCurrentUser();
+          if (user) {
+            // Get the member object for this user
+            const { member } = await db.getUserHomeMembership(user.id);
+            if (member) {
+              // Get all tasks and assign only the first one
+              const allTasks = await db.getTasks(createdHomeId, false);
+              if (allTasks.length > 0) {
+                const firstTask = allTasks[0];
+                
+                // Calculate due date based on task frequency
+                const assignedDate = new Date();
+                const dueDate = new Date();
+                switch (firstTask.frequency) {
+                  case 'daily':
+                    dueDate.setDate(dueDate.getDate() + 1);
+                    break;
+                  case 'weekly':
+                    dueDate.setDate(dueDate.getDate() + 7);
+                    break;
+                  case 'biweekly':
+                    dueDate.setDate(dueDate.getDate() + 14);
+                    break;
+                  case 'monthly':
+                    dueDate.setMonth(dueDate.getMonth() + 1);
+                    break;
+                  default:
+                    dueDate.setDate(dueDate.getDate() + 7); // Default to weekly
+                }
+                
+                await db.createTaskAssignment(firstTask.id, member.id, assignedDate, dueDate);
+                toast.success("Primera tarea asignada. Las demás quedan disponibles para los roomies");
+              }
+            }
+          }
         } catch (assignErr) {
-          console.warn('Auto-assign failed:', assignErr);
+          console.error('Task assignment failed:', assignErr);
         }
 
         setCompletedSteps(prev => new Set([...prev, "add-tasks"]));
-        toast.success("¡Tareas agregadas con rotación automática! 🔄");
+        toast.success("¡Tareas creadas! 🎉");
         setCurrentStep("first-task");
       } catch (error) {
         console.error('Error creando tareas:', error);
@@ -523,7 +598,7 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
 
             <div className="space-y-4">
               <div>
-                <Label>Invitar por correo</Label>
+                <Label>Crear invitación</Label>
                 <div className="flex gap-2 mt-1">
                   <Input
                     type="email"
@@ -536,13 +611,16 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
                     <Mail className="w-4 h-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  💡 Podrás copiar el link o token para compartirlo con tu roomie
+                </p>
               </div>
 
               <div className="space-y-2">
-                <Label>Invitaciones enviadas</Label>
+                <Label>Invitaciones creadas</Label>
                 {roommates.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">
-                    Aún no has invitado a nadie
+                    Aún no has creado ninguna invitación
                   </p>
                 ) : (
                   roommates.map((roommate, index) => (
@@ -558,16 +636,16 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleResendInvite(roommate.email)}
-                          title="Reenviar invitación"
+                          onClick={() => handleResendInvite(roommate)}
+                          title="Copiar link de invitación"
                         >
-                          <Link2 className="w-4 h-4" />
+                          <Link2 className="w-4 h-4 text-blue-500" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleRemoveRoommate(roommate.email)}
-                          title="Eliminar invitación"
+                          onClick={() => handleRemoveRoommate(roommate)}
+                          title="Cancelar invitación"
                         >
                           <X className="w-4 h-4 text-red-500" />
                         </Button>

@@ -342,7 +342,8 @@ export const db = {
   async getInvitationByToken(token: string) {
     if (!supabase) return null;
     
-    const { data, error } = await supabase
+    // First get the invitation with home info
+    const { data: invitation, error } = await supabase
       .from('home_members')
       .select(`
         *,
@@ -358,10 +359,24 @@ export const db = {
     
     if (error) {
       if (error.code === 'PGRST116') return null; // Not found
+      console.error('Error getting invitation:', error);
       throw error;
     }
     
-    return data;
+    // Then get the owner profile
+    if (invitation && invitation.homes?.created_by) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', invitation.homes.created_by)
+        .maybeSingle();
+      
+      if (profile) {
+        invitation.homes.profiles = profile;
+      }
+    }
+    
+    return invitation;
   },
 
   async acceptInvitation(token: string, userId: string) {
@@ -446,6 +461,52 @@ export const db = {
       .eq('status', 'pending');
     
     if (error) throw error;
+  },
+
+  async getPendingInvitationByEmail(email: string) {
+    if (!supabase) return null;
+    
+    // First get the invitation with home info
+    const { data: invitation, error } = await supabase
+      .from('home_members')
+      .select(`
+        *,
+        homes!inner (
+          id,
+          name,
+          created_by
+        )
+      `)
+      .eq('email', email)
+      .eq('status', 'pending')
+      .not('invitation_token', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error getting pending invitation by email:', error);
+      throw error;
+    }
+    
+    if (!invitation) {
+      return null;
+    }
+    
+    // Then get the owner profile
+    if (invitation && invitation.homes?.created_by) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', invitation.homes.created_by)
+        .maybeSingle();
+      
+      if (profile) {
+        invitation.homes.profiles = profile;
+      }
+    }
+    
+    return invitation;
   },
 
   async changeHome(userId: string, newHomeToken: string) {

@@ -523,7 +523,7 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
       </div>
 
       {/* SOLVER+: Available Cancelled Tasks Button */}
-      {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
+      {(masteryLevel === "novice" || masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
         <Button 
           variant="outline" 
           className="w-full mb-4"
@@ -565,7 +565,9 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
             <Sparkles className="w-12 h-12 text-[#d4a574] mx-auto mb-4" />
             <h3 className="mb-2">No hay tareas pendientes</h3>
             <p className="text-sm text-muted-foreground">
-              ¡Excelente trabajo! Todas las tareas están completadas.
+              {masteryLevel === "novice" 
+                ? "Aún no tienes tareas asignadas. Usa el botón de arriba para ver las tareas disponibles."
+                : "¡Excelente trabajo! Todas las tareas están completadas."}
             </p>
           </Card>
         ) : (

@@ -1237,6 +1237,22 @@ export function HomeManagementDialog({
           {/* CONFIG TAB */}
           <TabsContent value="config">
             <div className="space-y-4">
+              {/* Owner info */}
+              {(() => {
+                const owner = members.find(m => m.role === 'owner');
+                if (owner) {
+                  return (
+                    <Card className="p-4 bg-muted/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Crown className="w-4 h-4 text-yellow-600" />
+                        <Label className="text-sm font-medium">Propietario</Label>
+                      </div>
+                      <p className="text-sm">{owner.full_name || owner.email}</p>
+                    </Card>
+                  );
+                }
+              })()}
+              
               <div>
                 <Label htmlFor="home-name" className="text-sm">Nombre del hogar</Label>
                 <Input

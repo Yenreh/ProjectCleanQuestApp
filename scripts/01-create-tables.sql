@@ -411,6 +411,13 @@ DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can view home owners" ON profiles;
+CREATE POLICY "Users can view home owners" ON profiles
+  FOR SELECT USING (
+    auth.uid() IS NOT NULL AND
+    id IN (SELECT created_by FROM homes)
+  );
+
 DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
