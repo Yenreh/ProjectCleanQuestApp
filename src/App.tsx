@@ -25,46 +25,55 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
 import { db } from "./lib/db";
-import { calculateMasteryLevel, checkLevelUp, getLevelFeatures } from "./lib/masteryService";
+import { getLevelFeatures } from "./lib/masteryService";
 import type { MasteryLevel } from "./lib/masteryService";
-import type { Profile, Home as HomeType, HomeMember } from "./lib/types";
-import { useNotifications } from "./hooks/useNotifications";
 import { Notification, InvitationNotification } from "./lib/notifications";
-
-type Screen = "home" | "progress" | "challenges" | "harmony";
+// Zustand stores
+import { 
+  useAuthStore, 
+  useHomeStore,
+  useMembersStore,
+  useMasteryStore,
+  useNotificationStore, 
+  useInvitationStore, 
+  useUIStore 
+} from "./stores";
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // Zustand stores
+  const { currentUser, isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { currentHome, loadHomeData } = useHomeStore();
+  const { currentMember, members } = useMembersStore();
+  const { masteryLevel } = useMasteryStore();
+  const { notifications, unreadCount, loadNotifications, setUserEmail } = useNotificationStore();
+  const { 
+    invitationToken, 
+    changeHomeData, 
+    showChangeHomeDialog, 
+    isProcessing: isChangingHome,
+    setShowChangeHomeDialog,
+    setChangeHomeData,
+    processInvitation,
+    acceptHomeChange,
+    declineHomeChange,
+    checkUrlForInvitation,
+    clearInvitationData
+  } = useInvitationStore();
+  const {
+    currentScreen,
+    profileSettingsOpen,
+    homeManagementOpen,
+    generalSettingsOpen,
+    notificationsDialogOpen,
+    setCurrentScreen,
+    setProfileSettingsOpen,
+    setHomeManagementOpen,
+    setGeneralSettingsOpen,
+    setNotificationsDialogOpen
+  } = useUIStore();
+  
+  // Local state for onboarding
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<Screen>("home");
-  const [masteryLevel, setMasteryLevel] = useState<MasteryLevel>("novice");
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
-  
-  // User and home data
-  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
-  const [currentHome, setCurrentHome] = useState<HomeType | null>(null);
-  const [currentMember, setCurrentMember] = useState<HomeMember | null>(null);
-  
-  // Settings modals state
-  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
-  const [homeManagementOpen, setHomeManagementOpen] = useState(false);
-  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
-  
-  // Notifications dialog state
-  const [notificationsDialogOpen, setNotificationsDialogOpen] = useState(false);
-  const { notifications, refresh: refreshNotifications, unreadCount } = useNotifications(currentUser?.email);
-  
-  // Change home confirmation dialog state
-  const [showChangeHomeDialog, setShowChangeHomeDialog] = useState(false);
-  const [changeHomeData, setChangeHomeData] = useState<{
-    invitationId: string;
-    token: string;
-    currentHomeName: string | null;
-    newHomeName: string;
-    newHomeOwner?: string;
-  } | null>(null);
-  const [isChangingHome, setIsChangingHome] = useState(false);
   
   // Información del usuario
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
@@ -72,62 +81,17 @@ export default function App() {
 
   // Check for invitation token in URL on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('invite');
-    if (token) {
-      // Save token to localStorage for persistence through login
-      localStorage.setItem('pending_invitation', token);
-      setInvitationToken(token);
-      
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-      
-      // If user is already authenticated, trigger a reload to process it
-      (async () => {
-        const user = await db.getCurrentUser();
-        if (user) {
-          // Don't process directly - let loadUserData handle it
-          // This ensures proper checking of whether user has a home
-          setIsLoading(true);
-          await loadUserData(user.id);
-          setIsLoading(false);
-        } else {
-          // User not authenticated, show message to login/register
-          toast.info('Inicia sesión o regístrate para aceptar la invitación', {
-            duration: 5000
-          });
-        }
-      })();
-    } else {
-      // Check if there's a pending invitation in localStorage
-      const pendingToken = localStorage.getItem('pending_invitation');
-      if (pendingToken) {
-        setInvitationToken(pendingToken);
-      }
-    }
+    checkUrlForInvitation();
   }, []);
 
-  // Process invitation token (only for users without a home)
-  async function processInvitation(token: string, userId: string) {
-    try {
-      // Accept invitation directly (user doesn't have a home)
-      await db.acceptInvitation(token, userId);
-      toast.success('¡Te has unido al hogar!');
-      
-      // Clear token from state and localStorage
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
-      
-      await loadUserData(userId);
-    } catch (error: any) {
-      console.error('Error processing invitation:', error);
-      toast.error(error.message || 'Error al procesar la invitación');
-      
-      // Clear token on error to prevent infinite loop
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
+  // Setup notifications when user email changes
+  useEffect(() => {
+    if (currentUser?.email) {
+      setUserEmail(currentUser.email);
+    } else {
+      setUserEmail(null);
     }
-  }
+  }, [currentUser?.email]);
 
   // Check authentication on mount
   useEffect(() => {
@@ -136,14 +100,8 @@ export default function App() {
     // Subscribe to auth changes
     const subscription = db.onAuthStateChange((userId) => {
       if (userId) {
-        setIsAuthenticated(true);
-        setIsLoading(true); // Set loading state while fetching user data
-        loadUserData(userId).finally(() => setIsLoading(false));
+        loadUserData(userId);
       } else {
-        setIsAuthenticated(false);
-        setCurrentUser(null);
-        setCurrentHome(null);
-        setCurrentMember(null);
         setHasCompletedOnboarding(false);
       }
     });
@@ -151,137 +109,90 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function checkAuth() {
-    setIsLoading(true);
-    try {
-      const user = await db.getCurrentUser();
-      if (user) {
-        setIsAuthenticated(true);
-        await loadUserData(user.id);
-      }
-    } catch (error) {
-      console.error("Auth check error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   const loadUserData = async (userId: string) => {
     try {
-      // Get user profile
-      let profile = await db.getProfile(userId);
-      if (!profile) {
-        return;
-      }
+      // Load home data using store (this also checks onboarding)
+      await loadHomeData(userId);
       
-      setCurrentUser(profile);
+      // Get updated store values after loading
+      const { currentHome: updatedHome } = useHomeStore.getState();
+      const { currentMember: updatedMember } = useMembersStore.getState();
       
-      // Check if user has a pending invitation (BEFORE checking onboarding)
-      const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
-      let hasInvitation = false;
+      console.log('App: loadUserData - home:', updatedHome, 'member:', updatedMember);
       
-      // Check by token first (always show dialog for URL tokens)
-      if (pendingToken) {
-        try {
-          const invitationInfo = await db.getInvitationByToken(pendingToken);
-          if (invitationInfo) {
-            hasInvitation = true;
-            const { member, home } = await db.getUserHomeMembership(userId);
-            const ownerName = invitationInfo.homes.profiles?.full_name || invitationInfo.homes.profiles?.email;
-            setChangeHomeData({
-              invitationId: invitationInfo.id,
-              token: pendingToken,
-              currentHomeName: member && home ? home.name : null,
-              newHomeName: invitationInfo.homes.name,
-              newHomeOwner: ownerName
-            });
-            setShowChangeHomeDialog(true);
-            
-            // Stop here - dialog is showing, user needs to respond
-            return;
-          } else {
-            // Invalid token - clear it
-            setInvitationToken(null);
-            localStorage.removeItem('pending_invitation');
-            toast.error('El enlace de invitación no es válido o ha expirado');
-          }
-        } catch (error) {
-          console.error('Error checking invitation:', error);
-          setInvitationToken(null);
-          localStorage.removeItem('pending_invitation');
-        }
-      }
-      
-      // Check by email ONLY if user doesn't have a home yet
-      // If user has home, they'll see the notification badge instead
-      if (!hasInvitation && profile.email) {
-        const { member, home } = await db.getUserHomeMembership(userId);
+      // Check if user has completed onboarding
+      if (updatedHome && updatedMember) {
+        console.log('App: User has home and member, marking onboarding complete');
+        setHasCompletedOnboarding(true);
+      } else {
+        console.log('App: No home or member found, checking invitations...');
+        // Check if there's a pending invitation
+        const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
         
-        // Only auto-show dialog if user doesn't have a home
-        if (!member || !home) {
+        if (pendingToken) {
           try {
-            const emailInvitation = await db.getPendingInvitationByEmail(profile.email);
+            const invitationInfo = await db.getInvitationByToken(pendingToken);
+            if (invitationInfo) {
+              const { member, home } = await db.getUserHomeMembership(userId);
+              const ownerName = invitationInfo.homes.profiles?.full_name || invitationInfo.homes.profiles?.email;
+              
+              // Get current home owner if user has a home
+              let currentHomeOwner: string | undefined;
+              if (home) {
+                // Use existing members if available, otherwise fetch
+                if (members.length > 0) {
+                  const currentOwner = members.find(m => m.role === 'owner');
+                  currentHomeOwner = currentOwner?.full_name || currentOwner?.email;
+                } else {
+                  const currentHomeMembers = await db.getHomeMembers(home.id);
+                  const currentOwner = currentHomeMembers.find(m => m.role === 'owner');
+                  currentHomeOwner = currentOwner?.full_name || currentOwner?.email;
+                }
+              }
+              
+              setChangeHomeData({
+                invitationId: invitationInfo.id,
+                token: pendingToken,
+                currentHomeName: member && home ? home.name : null,
+                currentHomeOwner,
+                newHomeName: invitationInfo.homes.name,
+                newHomeOwner: ownerName
+              });
+              setShowChangeHomeDialog(true);
+              return;
+            } else {
+              clearInvitationData();
+              toast.error('El enlace de invitación no es válido o ha expirado');
+            }
+          } catch (error) {
+            console.error('Error checking invitation:', error);
+            clearInvitationData();
+          }
+        }
+        
+        // Check by email if no home
+        if (currentUser?.email) {
+          try {
+            const emailInvitation = await db.getPendingInvitationByEmail(currentUser.email);
             if (emailInvitation && emailInvitation.invitation_token) {
-              hasInvitation = true;
               const ownerName = emailInvitation.homes.profiles?.full_name || emailInvitation.homes.profiles?.email;
               setChangeHomeData({
                 invitationId: emailInvitation.id,
                 token: emailInvitation.invitation_token,
                 currentHomeName: null,
+                currentHomeOwner: undefined,
                 newHomeName: emailInvitation.homes.name,
                 newHomeOwner: ownerName
               });
               setShowChangeHomeDialog(true);
-              
-              // Stop here - dialog is showing, user needs to respond
               return;
             }
           } catch (error) {
             console.error('Error checking email invitation:', error);
           }
         }
-        // If user has home, email invitations will show in notifications badge
-      }
-
-      // Check onboarding status from profile
-      if (profile.has_completed_onboarding) {
-        // Load home membership data
-        const { member, home } = await db.getUserHomeMembership(userId);
         
-        if (member && home) {
-          setHasCompletedOnboarding(true);
-          setCurrentHome(home);
-          setCurrentMember(member);
-          
-          // Get member achievements count for mastery calculation
-          const achievementsCount = await db.getMemberAchievementsCount(member.id);
-          
-          // Calculate mastery level
-          const previousLevel = member.mastery_level as MasteryLevel;
-          const newLevel = calculateMasteryLevel({
-            totalPoints: member.total_points || 0,
-            achievementsUnlocked: achievementsCount,
-            weeksActive: member.weeks_active || 0,
-            tasksCompleted: member.tasks_completed || 0
-          });
-          
-          setMasteryLevel(newLevel);
-          
-          // Update level in database if changed silently
-          // No mostramos toast aquí porque ya se mostró cuando se completó la tarea
-          if (previousLevel !== newLevel) {
-            await db.updateMemberMasteryLevel(member.id, newLevel);
-          }
-        } else if (!hasInvitation) {
-          // Profile says onboarding is complete but no active membership found
-          // AND no pending invitation
-          // This happens when user is removed from a home
-          // Force them to go through onboarding again
-          setHasCompletedOnboarding(false);
-          toast.info('Has sido removido del hogar. Debes crear uno nuevo o unirte a otro.');
-        }
-      } else {
-        // User needs to complete onboarding
+        console.log('App: No invitations found, keeping in onboarding');
         setHasCompletedOnboarding(false);
       }
     } catch (error) {
@@ -291,18 +202,13 @@ export default function App() {
 
   async function handleSignOut() {
     try {
-      await db.signOut();
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setCurrentHome(null);
-      setCurrentMember(null);
+      const { signOut } = useAuthStore.getState();
+      const { clearHomeData } = useHomeStore.getState();
+      
+      await signOut();
+      clearHomeData();
+      clearInvitationData();
       setHasCompletedOnboarding(false);
-      
-      // Clear any pending invitation tokens
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
-      
-      toast.success("Sesión cerrada");
     } catch (error) {
       console.error("Sign out error:", error);
       toast.error("Error al cerrar sesión");
@@ -312,72 +218,64 @@ export default function App() {
   const handleConfirmChangeHome = async () => {
     if (!changeHomeData || !currentUser) return;
 
-    setIsChangingHome(true);
     try {
-      await db.acceptInvitation(changeHomeData.token, currentUser.id);
-      toast.success('¡Te has cambiado de casa exitosamente!');
+      await acceptHomeChange(currentUser.id);
       
-      // Clear token from both state and localStorage
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
-      
-      setShowChangeHomeDialog(false);
-      setChangeHomeData(null);
-      
-      // Refresh notifications and user data
-      refreshNotifications();
+      // Reload user data
       await loadUserData(currentUser.id);
-    } catch (error: any) {
-      console.error('Error changing home:', error);
-      toast.error(error.message || 'Error al cambiar de casa');
       
-      // Clear token even on error to prevent infinite loop
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
-    } finally {
-      setIsChangingHome(false);
+      // Refresh notifications
+      await loadNotifications();
+    } catch (error) {
+      console.error('Error changing home:', error);
     }
   };
 
   const handleCancelChangeHome = async () => {
+    if (!changeHomeData) return;
+
     try {
-      // Cancel the invitation in the database so it doesn't show up again
-      if (changeHomeData?.invitationId) {
-        await db.cancelInvitation(changeHomeData.invitationId);
-      }
-      
-      // Clear token from both state and localStorage when user cancels
-      setInvitationToken(null);
-      localStorage.removeItem('pending_invitation');
-      
-      setShowChangeHomeDialog(false);
-      setChangeHomeData(null);
-      toast.info('Invitación rechazada');
+      await declineHomeChange(currentHome?.name || null);
       
       // Refresh notifications
-      refreshNotifications();
+      await loadNotifications();
       
-      // If user has a home and completed onboarding, reload to show main app
-      if (currentUser && changeHomeData?.currentHomeName) {
-        setIsLoading(true);
+      // If user has home, reload data
+      if (currentUser && currentHome) {
         await loadUserData(currentUser.id);
-        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error canceling invitation:', error);
-      toast.error('Error al rechazar la invitación');
     }
   };
 
   async function handleOnboardingComplete() {
-    // Reload user data so we read the newly created home/tasks from backend
     if (currentUser) {
-      setIsLoading(true);
       await loadUserData(currentUser.id);
-      setIsLoading(false);
-      // `loadUserData` will set `hasCompletedOnboarding` based on DB state
     }
   }
+
+  // Handler for notification actions
+  const handleNotificationAction = (notification: Notification) => {
+    if (notification.type === 'invitation') {
+      const invNotification = notification as InvitationNotification;
+      
+      // Get current home owner
+      const currentOwner = members.find(m => m.role === 'owner');
+      const currentHomeOwner = currentOwner?.full_name || currentOwner?.email;
+      
+      setChangeHomeData({
+        invitationId: invNotification.data.invitationId,
+        token: invNotification.data.token,
+        currentHomeName: currentHome?.name || null,
+        currentHomeOwner,
+        newHomeName: invNotification.data.homeName,
+        newHomeOwner: invNotification.data.ownerName
+      });
+      setNotificationsDialogOpen(false);
+      setShowChangeHomeDialog(true);
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -395,7 +293,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <AuthView 
-        onSuccess={() => setIsAuthenticated(true)} 
+        onSuccess={() => { /* Auth handled by store */ }} 
         invitationToken={invitationToken}
       />
     );
@@ -433,6 +331,7 @@ export default function App() {
               setShowChangeHomeDialog(open);
             }}
             currentHomeName={changeHomeData.currentHomeName}
+            currentHomeOwner={changeHomeData.currentHomeOwner}
             newHomeName={changeHomeData.newHomeName}
             newHomeOwner={changeHomeData.newHomeOwner}
             onConfirm={handleConfirmChangeHome}
@@ -445,8 +344,14 @@ export default function App() {
   }
 
   const renderScreen = () => {
-    const handleLevelUpdate = (newLevel: MasteryLevel) => {
+    const handleLevelUpdate = async (newLevel: MasteryLevel) => {
+      const { setMasteryLevel } = useMasteryStore.getState();
       setMasteryLevel(newLevel);
+      
+      // Update in database if member exists
+      if (currentMember) {
+        await db.updateMemberMasteryLevel(currentMember.id, newLevel);
+      }
     };
 
     switch (currentScreen) {
@@ -489,7 +394,7 @@ export default function App() {
                 className="relative h-9 w-9 p-0"
                 onClick={() => setNotificationsDialogOpen(true)}
               >
-                {unreadCount > 0 ? (
+                {unreadCount() > 0 ? (
                   <BellDot className="w-5 h-5 text-red-500" />
                 ) : (
                   <Bell className="w-5 h-5" />
@@ -541,21 +446,23 @@ export default function App() {
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       DEV: Selector de nivel
                     </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => setMasteryLevel("novice")}>
-                      <span className={masteryLevel === "novice" ? "font-semibold" : ""}>Novato</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMasteryLevel("solver")}>
-                      <span className={masteryLevel === "solver" ? "font-semibold" : ""}>Solucionador</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMasteryLevel("expert")}>
-                      <span className={masteryLevel === "expert" ? "font-semibold" : ""}>Experto</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMasteryLevel("master")}>
-                      <span className={masteryLevel === "master" ? "font-semibold" : ""}>Maestro</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMasteryLevel("visionary")}>
-                      <span className={masteryLevel === "visionary" ? "font-semibold" : ""}>Visionario</span>
-                    </DropdownMenuItem>
+                    {(['novice', 'solver', 'expert', 'master', 'visionary'] as const).map((level) => (
+                      <DropdownMenuItem 
+                        key={level}
+                        onClick={() => {
+                          const { setMasteryLevel } = useMasteryStore.getState();
+                          setMasteryLevel(level);
+                        }}
+                      >
+                        <span className={masteryLevel === level ? "font-semibold" : ""}>
+                          {level === 'novice' && 'Novato'}
+                          {level === 'solver' && 'Solucionador'}
+                          {level === 'expert' && 'Experto'}
+                          {level === 'master' && 'Maestro'}
+                          {level === 'visionary' && 'Visionario'}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
                   </>
                 )}
 
@@ -679,6 +586,7 @@ export default function App() {
             setShowChangeHomeDialog(open);
           }}
           currentHomeName={changeHomeData.currentHomeName}
+          currentHomeOwner={changeHomeData.currentHomeOwner}
           newHomeName={changeHomeData.newHomeName}
           newHomeOwner={changeHomeData.newHomeOwner}
           onConfirm={handleConfirmChangeHome}
@@ -695,11 +603,17 @@ export default function App() {
         onActionClick={(notification) => {
           if (notification.type === 'invitation') {
             const invNotification = notification as InvitationNotification;
+            
+            // Get current home owner
+            const currentOwner = members.find(m => m.role === 'owner');
+            const currentHomeOwner = currentOwner?.full_name || currentOwner?.email;
+            
             // Usar el mismo flujo que las invitaciones por token
             setChangeHomeData({
               invitationId: invNotification.data.invitationId,
               token: invNotification.data.token,
               currentHomeName: currentHome?.name || null,
+              currentHomeOwner,
               newHomeName: invNotification.data.homeName,
               newHomeOwner: invNotification.data.ownerName
             });

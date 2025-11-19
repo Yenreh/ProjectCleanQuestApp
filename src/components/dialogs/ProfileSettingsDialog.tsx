@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,8 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Avatar, AvatarFallback } from "../ui/avatar";
-import { User, Shield, Settings, Loader2, EyeOff, Eye, Home, AlertTriangle, Bell } from "lucide-react";
+import { User, Shield, Settings, Loader2, EyeOff, Eye, Home, AlertTriangle, Bell, Crown } from "lucide-react";
+import { useMembersStore, useInvitationStore, useAuthStore } from "../../stores";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
 import type { HomeMember, Home as HomeType } from "../../lib/types";
@@ -32,148 +33,128 @@ export function ProfileSettingsDialog({
   currentHome,
   onUpdate 
 }: ProfileSettingsDialogProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // Personal info state
-  const [name, setName] = useState(currentMember?.full_name || "");
-  const [email, setEmail] = useState(currentMember?.email || "");
-  
-  // Security state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  
-  // Preferences state
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [weeklyReports, setWeeklyReports] = useState(true);
+  const {
+    profileName,
+    profileEmail,
+    showPassword,
+    currentPassword,
+    newPassword,
+    confirmPassword,
+    emailNotifications,
+    pushNotifications,
+    weeklyReports,
+    isSavingProfile,
+    isChangingPassword,
+    isSavingPreferences,
+    members,
+    setProfileName,
+    setProfileEmail,
+    setShowPassword,
+    setCurrentPassword,
+    setNewPassword,
+    setConfirmPassword,
+    setEmailNotifications,
+    setPushNotifications,
+    setWeeklyReports,
+    initializeProfile,
+    updateProfile,
+    changePassword,
+    updatePreferences,
+    loadMembers,
+  } = useMembersStore();
 
-  // Change home state
-  const [inviteToken, setInviteToken] = useState("");
-  const [showChangeHomeConfirm, setShowChangeHomeConfirm] = useState(false);
+  // Invitation store for change home functionality
+  const {
+    changeHomeData,
+    isProcessing: isProcessingInvite,
+    processInvitation,
+    acceptHomeChange,
+    declineHomeChange,
+  } = useInvitationStore();
+
+  // Auth store for updating user profile globally
+  const { updateUserProfile } = useAuthStore();
 
   useEffect(() => {
     if (currentMember) {
-      setName(currentMember.full_name || "");
-      setEmail(currentMember.email || "");
+      initializeProfile(currentMember);
     }
-  }, [currentMember]);
+  }, [currentMember, initializeProfile]);
+
+  // Load members when dialog opens and currentHome is available
+  useEffect(() => {
+    if (open && currentHome) {
+      loadMembers(currentHome.id);
+    }
+  }, [open, currentHome, loadMembers]);
 
   const handleUpdateProfile = async () => {
-    if (!currentMember) return;
+    if (!currentMember || !currentHome) return;
     
-    if (!name.trim()) {
-      toast.error("El nombre no puede estar vacío");
-      return;
-    }
-    
-    // Store for rollback
-    const prevName = name;
-    const prevEmail = email;
-    
-    setIsLoading(true);
     try {
-      // Persist to database
-      await db.updateMemberProfile(currentMember.id, name.trim(), email.trim());
-      toast.success("Perfil actualizado correctamente");
+      await updateProfile(currentMember.id);
       
-      // Notify parent to refresh
+      // Update authStore to reflect changes globally (fixes the need for F5)
+      await updateUserProfile({ full_name: profileName });
+      
+      // Reload currentMember to reflect changes from profiles table
+      const user = await db.getCurrentUser();
+      if (user) {
+        const updatedMember = await db.getCurrentMember(currentHome.id, user.id);
+        if (updatedMember) {
+          const { setCurrentMember } = useMembersStore.getState();
+          setCurrentMember(updatedMember);
+        }
+      }
+      
       onUpdate?.();
-      
-      // Give a moment for the update to propagate
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 500);
     } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error("Error al actualizar perfil");
-      
-      // Rollback on error
-      setName(prevName);
-      setEmail(prevEmail);
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
   const handleChangePassword = async () => {
     if (!currentMember) return;
     
-    if (newPassword !== confirmPassword) {
-      toast.error("Las contraseñas no coinciden");
-      return;
-    }
-    
-    if (newPassword.length < 8) {
-      toast.error("La contraseña debe tener al menos 8 caracteres");
-      return;
-    }
-    
-    setIsLoading(true);
     try {
-      await db.changePassword(currentPassword, newPassword);
-      toast.success("Contraseña cambiada correctamente");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      await changePassword(currentMember.id);
     } catch (error) {
-      console.error('Error changing password:', error);
-      toast.error("Error al cambiar contraseña");
-    } finally {
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
   const handleUpdatePreferences = async () => {
     if (!currentMember) return;
     
-    setIsLoading(true);
     try {
-      await db.updateMemberPreferences(currentMember.id, {
-        emailNotifications,
-        pushNotifications,
-        weeklyReports
-      });
-      toast.success("Preferencias actualizadas correctamente");
+      await updatePreferences();
       onUpdate?.();
     } catch (error) {
-      console.error('Error updating preferences:', error);
-      toast.error("Error al actualizar preferencias");
-    } finally {
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
-  const handleChangeHome = async () => {
-    if (!inviteToken.trim()) {
-      toast.error("Ingresa un token de invitación válido");
-      return;
-    }
-
+  const handleProcessInvitation = async (token: string) => {
     const user = await db.getCurrentUser();
     if (!user) {
-      toast.error("Usuario no encontrado");
+      toast.error("Usuario no autenticado");
       return;
     }
+    await processInvitation(token, user.id);
+  };
 
-    setIsLoading(true);
-    try {
-      await db.changeHome(user.id, inviteToken.trim());
-      toast.success("¡Te has cambiado de casa exitosamente!");
-      setInviteToken("");
-      setShowChangeHomeConfirm(false);
-      onOpenChange(false);
-      
-      // Reload page to update all data
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (error: any) {
-      console.error('Error changing home:', error);
-      toast.error(error.message || "Error al cambiar de casa");
-    } finally {
-      setIsLoading(false);
+  const handleAcceptHomeChange = async () => {
+    const user = await db.getCurrentUser();
+    if (!user) {
+      toast.error("Usuario no autenticado");
+      return;
     }
+    await acceptHomeChange(user.id);
+    onUpdate?.();
+  };
+
+  const handleDeclineHomeChange = async () => {
+    await declineHomeChange(currentHome?.name || null);
   };
 
   if (!currentMember) return null;
@@ -183,6 +164,10 @@ export function ProfileSettingsDialog({
     .map((n: string) => n[0])
     .join('')
     .toUpperCase() || "U";
+
+  // Get owner name for current home
+  const ownerMember = members.find(m => m.role === 'owner');
+  const ownerName = ownerMember?.full_name || ownerMember?.email || 'Desconocido';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -230,8 +215,8 @@ export function ProfileSettingsDialog({
                 <Label htmlFor="name">Nombre completo</Label>
                 <Input
                   id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
                   placeholder="Tu nombre"
                 />
               </div>
@@ -241,7 +226,7 @@ export function ProfileSettingsDialog({
                 <Input
                   id="email"
                   type="email"
-                  value={email}
+                  value={profileEmail}
                   readOnly
                   disabled
                   placeholder="tu@email.com"
@@ -254,10 +239,10 @@ export function ProfileSettingsDialog({
 
               <Button 
                 onClick={handleUpdateProfile}
-                disabled={isLoading}
+                disabled={isSavingProfile}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSavingProfile && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Guardar cambios
               </Button>
             </div>
@@ -323,10 +308,10 @@ export function ProfileSettingsDialog({
 
               <Button 
                 onClick={handleChangePassword}
-                disabled={isLoading || !currentPassword || !newPassword || !confirmPassword}
+                disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isChangingPassword && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Cambiar contraseña
               </Button>
             </div>
@@ -392,74 +377,101 @@ export function ProfileSettingsDialog({
 
               <Button 
                 onClick={handleUpdatePreferences}
-                disabled={isLoading}
+                disabled={isSavingPreferences}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSavingPreferences && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Guardar preferencias
               </Button>
             </div>
           </TabsContent>
 
           <TabsContent value="home" className="space-y-4 mt-6">
-            <Card className="p-4 bg-muted/30">
-              <h3 className="font-semibold mb-2">Casa actual</h3>
-              <p className="text-sm text-muted-foreground">
+            <Card className="p-4 bg-[#e8dff0]">
+              <div className="flex items-center gap-2 mb-2">
+                <Home className="h-4 w-4 text-[#9b7cb8]" />
+                <p className="text-xs text-[#9b7cb8]">Casa actual</p>
+              </div>
+              <p className="font-semibold">
                 {currentHome?.name || "No estás en ninguna casa"}
               </p>
+              {currentHome && ownerMember && (
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#9b7cb8]/20">
+                  <Crown className="h-3 w-3 text-yellow-600" />
+                  <p className="text-xs text-muted-foreground">{ownerName}</p>
+                </div>
+              )}
             </Card>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>Token de invitación</Label>
-                <Input
-                  type="text"
-                  placeholder="Pega el token de invitación aquí"
-                  value={inviteToken}
-                  onChange={(e) => setInviteToken(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Ingresa el token de invitación a una nueva casa
-                </p>
-              </div>
-
-              <Card className="p-4 border-yellow-500/50 bg-yellow-500/10">
-                <div className="flex gap-3">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-sm">Advertencia</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Al cambiar de casa, tu membresía actual se desactivará. 
-                      Perderás acceso a las tareas, estadísticas y configuración de tu casa actual.
+            {changeHomeData && (
+              <Card className="p-4 bg-yellow-500/10 border-yellow-500/50">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-2 text-sm">Invitación pendiente</h4>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Has sido invitado a unirte a <strong>{changeHomeData.newHomeName}</strong>
+                      {changeHomeData.currentHomeName && (
+                        <> en lugar de <strong>{changeHomeData.currentHomeName}</strong></>
+                      )}
                     </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleAcceptHomeChange}
+                        disabled={isProcessingInvite}
+                        className="bg-[#6fbd9d] hover:bg-[#5fa989]"
+                      >
+                        {isProcessingInvite && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                        Aceptar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDeclineHomeChange}
+                        disabled={isProcessingInvite}
+                      >
+                        Rechazar
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
+            )}
 
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="confirmChange"
-                  checked={showChangeHomeConfirm}
-                  onChange={(e) => setShowChangeHomeConfirm(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Cambiar de hogar</h4>
+              <p className="text-xs text-muted-foreground">
+                Ingresa el token de invitación que te compartió un miembro
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Token de invitación"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const input = e.currentTarget;
+                      if (input.value.trim()) {
+                        handleProcessInvitation(input.value.trim());
+                        input.value = '';
+                      }
+                    }
+                  }}
                 />
-                <label
-                  htmlFor="confirmChange"
-                  className="text-sm font-medium leading-none cursor-pointer"
+                <Button
+                  onClick={(e) => {
+                    const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                    if (input?.value.trim()) {
+                      handleProcessInvitation(input.value.trim());
+                      input.value = '';
+                    }
+                  }}
+                  disabled={isProcessingInvite}
+                  className="bg-[#6fbd9d] hover:bg-[#5fa989]"
                 >
-                  Entiendo las consecuencias y quiero cambiar de casa
-                </label>
+                  {isProcessingInvite && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Procesar
+                </Button>
               </div>
-
-              <Button 
-                onClick={handleChangeHome}
-                disabled={isLoading || !showChangeHomeConfirm || !inviteToken.trim()}
-                className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
-              >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Cambiar de casa
-              </Button>
             </div>
           </TabsContent>
         </Tabs>

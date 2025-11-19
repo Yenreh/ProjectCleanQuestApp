@@ -2,10 +2,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Calendar, RefreshCw, AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
-import { db } from "../../lib/db";
+import { useUnifiedSettingsStore } from "../../stores";
 import type { Home } from "../../lib/types";
-import { useState } from "react";
 
 interface NextCycleDialogProps {
   open: boolean;
@@ -15,15 +13,13 @@ interface NextCycleDialogProps {
 }
 
 export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycleDialogProps) {
-  const [isRotating, setIsRotating] = useState(false);
+  const { isRotatingCycle, closeCycleAndReassign } = useUnifiedSettingsStore();
 
   const handleRotate = async () => {
     if (!home) return;
     
-    setIsRotating(true);
     try {
-      const result = await db.closeCycleAndReassign(home.id);
-      toast.success(`Ciclo cerrado: ${result.closed} tareas pendientes. ${result.assigned} tareas reasignadas.`);
+      await closeCycleAndReassign(home.id);
       
       if (onRotate) {
         onRotate();
@@ -31,10 +27,7 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
       
       onOpenChange(false);
     } catch (error) {
-      console.error('Error rotating cycle:', error);
-      toast.error('Error al rotar el ciclo');
-    } finally {
-      setIsRotating(false);
+      // Error already handled in store
     }
   };
 
@@ -85,10 +78,10 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
                     variant="outline"
                     className="w-full"
                     onClick={handleRotate}
-                    disabled={isRotating}
+                    disabled={isRotatingCycle}
                   >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isRotating ? 'animate-spin' : ''}`} />
-                    {isRotating ? 'Rotando...' : 'Forzar Rotación Ahora'}
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isRotatingCycle ? 'animate-spin' : ''}`} />
+                    {isRotatingCycle ? 'Rotando...' : 'Forzar Rotación Ahora'}
                   </Button>
                 </div>
               </div>
@@ -106,10 +99,10 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
                     size="sm" 
                     className="w-full bg-[#d4a574] hover:bg-[#c49565]"
                     onClick={handleRotate}
-                    disabled={isRotating}
+                    disabled={isRotatingCycle}
                   >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isRotating ? 'animate-spin' : ''}`} />
-                    {isRotating ? 'Rotando...' : 'Cerrar Ciclo y Reasignar'}
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isRotatingCycle ? 'animate-spin' : ''}`} />
+                    {isRotatingCycle ? 'Rotando...' : 'Cerrar Ciclo y Reasignar'}
                   </Button>
                 </div>
               </div>

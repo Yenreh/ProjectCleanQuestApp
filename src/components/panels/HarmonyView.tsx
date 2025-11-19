@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { StatisticsDialog } from "../dialogs/StatisticsDialog";
 import { NextCycleDialog } from "../dialogs/NextCycleDialog";
 import type { Zone, Achievement, HomeMember, HomeMetrics, Home, ImprovementProposal } from "../../lib/types";
+import { useHomeStore, useUnifiedSettingsStore, useUIStore } from "../../stores";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -29,96 +30,52 @@ interface HarmonyRoomProps {
 }
 
 export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoomProps) {
+  // Use stores
+  const { currentHome } = useHomeStore();
+  const {
+    goalPercentage,
+    rotationPolicy,
+    autoRotation,
+    isUpdatingGoal,
+    isUpdatingRotation,
+    setGoalPercentage,
+    setRotationPolicy,
+    setAutoRotation,
+    loadHomeSettings,
+    updateGoal,
+    updateRotationPolicy,
+    updateAutoRotation
+  } = useUnifiedSettingsStore();
+  const {
+    statisticsOpen,
+    nextCycleOpen,
+    setStatisticsOpen,
+    setNextCycleOpen
+  } = useUIStore();
+  
+  // Local state for view-specific data
   const [isLoading, setIsLoading] = useState(true);
   const [zones, setZones] = useState<Zone[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
-  const [home, setHome] = useState<Home | null>(null);
   const [members, setMembers] = useState<HomeMember[]>([]);
   const [completedProposals, setCompletedProposals] = useState<ImprovementProposal[]>([]);
   const [changeLog, setChangeLog] = useState<ChangeLogEntry[]>([]);
   const [zoneStatus, setZoneStatus] = useState<{ [zoneId: number]: { total: number; completed: number; percentage: number } }>({});
-  const [goalPercentage, setGoalPercentage] = useState("80");
-  const [rotationPolicy, setRotationPolicy] = useState("weekly");
-  const [autoRotation, setAutoRotation] = useState(true);
-  const [statisticsOpen, setStatisticsOpen] = useState(false);
-  const [nextCycleOpen, setNextCycleOpen] = useState(false);
-  
-  // Loading states for actions
-  const [isUpdatingGoal, setIsUpdatingGoal] = useState(false);
-  const [isUpdatingRotation, setIsUpdatingRotation] = useState(false);
 
   const handleUpdateGoal = async () => {
     if (!homeId || isUpdatingGoal) return;
-    
-    // Store for rollback
-    const prevGoal = goalPercentage;
-    const prevHome = home;
-    
-    setIsUpdatingGoal(true);
-    try {
-      // Optimistic update
-      if (home) {
-        setHome({ ...home, goal_percentage: parseInt(goalPercentage) });
-      }
-      
-      // Persist to database
-      await db.updateHome(homeId, { goal_percentage: parseInt(goalPercentage) });
-      toast.success('Meta actualizada');
-      
-      // Reload for accuracy
-      await loadData();
-    } catch (error) {
-      console.error('Error updating goal:', error);
-      toast.error('Error al actualizar meta');
-      
-      // Rollback on error
-      setGoalPercentage(prevGoal);
-      setHome(prevHome);
-    } finally {
-      setIsUpdatingGoal(false);
-    }
+    await updateGoal(homeId, goalPercentage);
   };
-
+  
   const handleUpdateRotation = async () => {
     if (!homeId || isUpdatingRotation) return;
-    
-    // Store for rollback
-    const prevRotationPolicy = rotationPolicy;
-    const prevAutoRotation = autoRotation;
-    const prevHome = home;
-    
-    setIsUpdatingRotation(true);
-    try {
-      // Optimistic update
-      if (home) {
-        setHome({ 
-          ...home, 
-          rotation_policy: rotationPolicy as any,
-          auto_rotation: autoRotation 
-        });
-      }
-      
-      // Persist to database
-      await db.updateHome(homeId, { 
-        rotation_policy: rotationPolicy as any,
-        auto_rotation: autoRotation 
-      });
-      toast.success('Política de rotación actualizada');
-      
-      // Reload for accuracy
-      await loadData();
-    } catch (error) {
-      console.error('Error updating rotation:', error);
-      toast.error('Error al actualizar rotación');
-      
-      // Rollback on error
-      setRotationPolicy(prevRotationPolicy);
-      setAutoRotation(prevAutoRotation);
-      setHome(prevHome);
-    } finally {
-      setIsUpdatingRotation(false);
-    }
+    await updateRotationPolicy(homeId, rotationPolicy as any);
+  };
+  
+  const handleToggleAutoRotation = async () => {
+    if (!homeId) return;
+    await updateAutoRotation(homeId, !autoRotation);
   };
 
   const loadData = useCallback(async () => {
@@ -126,11 +83,10 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
     
     setIsLoading(true);
     try {
-      const [homeZones, memberAchievements, homeMetrics, homeData, homeMembers, zonesStatus] = await Promise.all([
+      const [homeZones, memberAchievements, homeMetrics, homeMembers, zonesStatus] = await Promise.all([
         db.getZones(homeId),
         db.getMemberAchievements(currentMember.id),
         db.getHomeMetrics(homeId),
-        db.getHome(homeId),
         db.getHomeMembers(homeId),
         db.getZoneStatus(homeId)
       ]);
@@ -138,24 +94,19 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
       setZones(homeZones);
       setAchievements(memberAchievements);
       setMetrics(homeMetrics);
-      setHome(homeData);
       setMembers(homeMembers.filter(m => m.status === 'active'));
       setZoneStatus(zonesStatus);
       
-      // Cargar configuración actual del home
-      if (homeData) {
-        setGoalPercentage(homeData.goal_percentage?.toString() || "80");
-        setRotationPolicy(homeData.rotation_policy || "weekly");
-        setAutoRotation(homeData.auto_rotation ?? true);
-      }
+      // Load settings from currentHome
+      loadHomeSettings(currentHome);
       
-      // Cargar propuestas completadas para Visionary
+      // Load proposals for Visionary
       if (masteryLevel === 'visionary') {
         const proposals = await db.getProposals(homeId, 'implemented');
         setCompletedProposals(proposals);
       }
       
-      // Cargar historial de cambios
+      // Load change log
       await loadChangeLog();
     } catch (error) {
       console.error('Error loading harmony room data:', error);
@@ -178,10 +129,10 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
       // Por ahora crear entradas de ejemplo basadas en datos reales
       const entries: ChangeLogEntry[] = [];
       
-      if (home) {
+      if (currentHome) {
         entries.push({
-          date: new Date(home.updated_at || home.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
-          change: `Meta grupal configurada a ${home.goal_percentage}%`,
+          date: new Date(currentHome.updated_at || currentHome.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
+          change: `Meta grupal configurada a ${currentHome.goal_percentage}%`,
           author: members[0]?.full_name || members[0]?.email || 'Admin'
         });
       }
@@ -456,7 +407,7 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
           {zones.map((zone) => {
             const status = zoneStatus[zone.id];
             const percentage = status?.percentage || 0;
-            const goalPercent = home?.goal_percentage || 80;
+            const goalPercent = currentHome?.goal_percentage || 80;
             
             // Determinar el estado visual según el porcentaje
             let statusClass = '';
@@ -644,13 +595,13 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
         onOpenChange={setStatisticsOpen}
         metrics={metrics}
         members={members}
-        home={home}
+        home={currentHome}
       />
 
       <NextCycleDialog
         open={nextCycleOpen}
         onOpenChange={setNextCycleOpen}
-        home={home}
+        home={currentHome}
       />
     </div>
   );

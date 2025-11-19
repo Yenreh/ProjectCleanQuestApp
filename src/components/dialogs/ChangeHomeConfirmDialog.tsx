@@ -13,6 +13,7 @@ interface ChangeHomeConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentHomeName: string | null;
+  currentHomeOwner?: string;
   newHomeName: string;
   newHomeOwner?: string;
   onConfirm: () => void;
@@ -24,6 +25,7 @@ export function ChangeHomeConfirmDialog({
   open,
   onOpenChange,
   currentHomeName,
+  currentHomeOwner,
   newHomeName,
   newHomeOwner,
   onConfirm,
@@ -48,24 +50,30 @@ export function ChangeHomeConfirmDialog({
           {/* Current and New Home Comparison */}
           {hasCurrentHome ? (
             <div className="flex items-center gap-3">
-              <Card className="flex-1 p-4 bg-muted/30">
+              <Card className="flex-1 p-4 bg-[#e8dff0]">
                 <div className="flex items-center gap-2 mb-2">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">Casa actual</p>
+                  <Home className="h-4 w-4 text-[#9b7cb8]" />
+                  <p className="text-xs text-[#9b7cb8]">Casa actual</p>
                 </div>
                 <p className="font-semibold">{currentHomeName}</p>
+                {currentHomeOwner && (
+                  <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#9b7cb8]/20">
+                    <Crown className="h-3 w-3 text-yellow-600" />
+                    <p className="text-xs text-muted-foreground">{currentHomeOwner}</p>
+                  </div>
+                )}
               </Card>
 
               <ArrowRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
 
-              <Card className="flex-1 p-4 bg-[#e9f5f0]">
+              <Card className="flex-1 p-4 bg-[#d4f0e3]">
                 <div className="flex items-center gap-2 mb-2">
-                  <Home className="h-4 w-4 text-[#6fbd9d]" />
-                  <p className="text-xs text-[#6fbd9d]">Casa nueva</p>
+                  <Home className="h-4 w-4 text-[#4a9d72]" />
+                  <p className="text-xs text-[#4a9d72]">Casa nueva</p>
                 </div>
                 <p className="font-semibold">{newHomeName}</p>
                 {newHomeOwner && (
-                  <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#6fbd9d]/20">
+                  <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#4a9d72]/20">
                     <Crown className="h-3 w-3 text-yellow-600" />
                     <p className="text-xs text-muted-foreground">{newHomeOwner}</p>
                   </div>
@@ -73,14 +81,14 @@ export function ChangeHomeConfirmDialog({
               </Card>
             </div>
           ) : (
-            <Card className="p-4 bg-[#e9f5f0]">
+            <Card className="p-4 bg-[#d4f0e3]">
               <div className="flex items-center gap-2 mb-2">
-                <Home className="h-4 w-4 text-[#6fbd9d]" />
-                <p className="text-xs text-[#6fbd9d]">Hogar</p>
+                <Home className="h-4 w-4 text-[#4a9d72]" />
+                <p className="text-xs text-[#4a9d72]">Hogar</p>
               </div>
               <p className="font-semibold">{newHomeName}</p>
               {newHomeOwner && (
-                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#6fbd9d]/20">
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#4a9d72]/20">
                   <Crown className="h-3 w-3 text-yellow-600" />
                   <p className="text-xs text-muted-foreground">{newHomeOwner}</p>
                 </div>

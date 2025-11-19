@@ -10,8 +10,7 @@ import {
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { AlertCircle, X, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { db } from "../../lib/db";
+import { useAssignmentsStore } from "../../stores";
 import type { AssignmentWithDetails } from "../../lib/types";
 
 interface CancelTaskDialogProps {
@@ -31,31 +30,21 @@ export function CancelTaskDialog({
 }: CancelTaskDialogProps) {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { cancelTask } = useAssignmentsStore();
 
   const handleCancel = async () => {
-    if (!assignment || !reason.trim()) {
-      toast.error("Por favor escribe un motivo para cancelar");
-      return;
-    }
+    if (!assignment || !reason.trim()) return;
 
     setIsSubmitting(true);
 
     try {
-      await db.cancelTask(assignment.id, memberId, reason.trim());
-
-      toast.success("Tarea cancelada correctamente", {
-        description: "Tus compañeros podrán verla y tomarla si desean",
-      });
-
+      await cancelTask(assignment.id, memberId, reason.trim());
       setReason("");
       onOpenChange(false);
 
       if (onSuccess) {
         onSuccess();
       }
-    } catch (error) {
-      console.error("Error canceling task:", error);
-      toast.error("Error al cancelar la tarea");
     } finally {
       setIsSubmitting(false);
     }

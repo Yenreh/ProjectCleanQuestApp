@@ -10,6 +10,7 @@ import { AvailableTasksDialog } from "../dialogs/AvailableTasksDialog";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
 import type { HomeMember, HomeMetrics, Home, ImprovementProposal } from "../../lib/types";
+import { useHomeStore, useAssignmentsStore, useUIStore } from "../../stores";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -37,31 +38,35 @@ interface ProgressPanelProps {
 }
 
 export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPanelProps) {
+  // Use homeStore for shared data
+  const { currentHome } = useHomeStore();
+  
+  // Local state for view-specific data
   const [isLoading, setIsLoading] = useState(true);
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   const [members, setMembers] = useState<HomeMember[]>([]);
-  const [home, setHome] = useState<Home | null>(null);
   const [effortBreakdown, setEffortBreakdown] = useState<TaskEffortBreakdown>({ light: 0, medium: 0, heavy: 0 });
   const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrend[]>([]);
   const [changeLog, setChangeLog] = useState<ChangeLogEntry[]>([]);
   const [activeProposals, setActiveProposals] = useState<ImprovementProposal[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
-  const [availableTasksOpen, setAvailableTasksOpen] = useState(false);
+  
+  // Use stores
+  const { loadAssignments } = useAssignmentsStore();
+  const { availableTasksOpen, setAvailableTasksOpen } = useUIStore();
   
   const loadData = useCallback(async () => {
     if (!homeId || !currentMember) return;
     
     setIsLoading(true);
     try {
-      const [homeMetrics, homeMembers, homeData] = await Promise.all([
+      const [homeMetrics, homeMembers] = await Promise.all([
         db.getHomeMetrics(homeId),
-        db.getHomeMembers(homeId),
-        db.getHome(homeId)
+        db.getHomeMembers(homeId)
       ]);
       
       setMetrics(homeMetrics);
       setMembers(homeMembers.filter(m => m.status === 'active'));
-      setHome(homeData);
       
       // Load effort breakdown
       await loadEffortBreakdown();
@@ -160,7 +165,7 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
       setChangeLog([
         {
           date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
-          description: 'Meta grupal actualizada a ' + (home?.goal_percentage || 80) + '%',
+          description: 'Meta grupal actualizada a ' + (currentHome?.goal_percentage || 80) + '%',
           changedBy: members[0]?.full_name || members[0]?.email || 'Admin'
         }
       ]);
@@ -475,15 +480,15 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg">
                     <span className="text-sm">Meta grupal</span>
-                    <Badge variant="outline">{home?.goal_percentage || 80}%</Badge>
+                    <Badge variant="outline">{currentHome?.goal_percentage || 80}%</Badge>
                   </div>
                   <div className="flex items-center justify-between p-3 bg-[#f5f3ed] rounded-lg">
                     <span className="text-sm">Política de rotación</span>
                     <Badge variant="outline">
-                      {home?.rotation_policy === 'daily' && 'Diaria'}
-                      {home?.rotation_policy === 'weekly' && 'Semanal'}
-                      {home?.rotation_policy === 'biweekly' && 'Quincenal'}
-                      {home?.rotation_policy === 'monthly' && 'Mensual'}
+                      {currentHome?.rotation_policy === 'daily' && 'Diaria'}
+                      {currentHome?.rotation_policy === 'weekly' && 'Semanal'}
+                      {currentHome?.rotation_policy === 'biweekly' && 'Quincenal'}
+                      {currentHome?.rotation_policy === 'monthly' && 'Mensual'}
                     </Badge>
                   </div>
                 </div>
@@ -664,7 +669,11 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
         homeId={homeId || 0}
         currentMemberId={currentMember?.id || 0}
         onTaskTaken={async () => {
-          await loadData();
+          // Reload assignments and metrics
+          if (currentMember && homeId) {
+            await loadAssignments(currentMember.id, homeId);
+            await loadData();
+          }
         }}
       />
     </div>

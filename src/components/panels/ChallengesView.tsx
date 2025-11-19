@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -7,10 +7,8 @@ import { Textarea } from "../ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Clock, Trophy, Users, User, Sparkles, Home, UtensilsCrossed, Lightbulb, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { Progress } from "../ui/progress";
-import { AchievementsSection } from "../sections/AchievementsSection";
-import { db } from "../../lib/db";
-import { toast } from "sonner";
-import type { ChallengeWithParticipants, ProposalWithAuthor, HomeMember, Achievement } from "../../lib/types";
+import { useChallengesStore, useAchievementsStore } from "../../stores";
+import type { ChallengeWithParticipants, HomeMember, Achievement } from "../../lib/types";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -21,137 +19,48 @@ interface ChallengesViewProps {
 }
 
 export function ChallengesView({ masteryLevel, currentMember, homeId }: ChallengesViewProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [challenges, setChallenges] = useState<ChallengeWithParticipants[]>([]);
-  const [proposals, setProposals] = useState<ProposalWithAuthor[]>([]);
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [proposalTitle, setProposalTitle] = useState("");
-  const [hypothesis, setHypothesis] = useState("");
+  // Challenges store state
+  const {
+    challenges,
+    proposals,
+    proposalTitle,
+    hypothesis,
+    isLoading,
+    loadData,
+    joinChallenge,
+    createProposal,
+    voteOnProposal,
+    setProposalTitle,
+    setHypothesis,
+  } = useChallengesStore();
+  
+  // Achievements store state
+  const { achievements } = useAchievementsStore();
 
-  const loadData = useCallback(async () => {
+  // Load data when component mounts or dependencies change
+  const loadChallengesData = useCallback(async () => {
     if (!homeId || !currentMember) return;
-    
-    setIsLoading(true);
-    try {
-      const [homeChallenges, homeProposals, memberAchievements] = await Promise.all([
-        db.getChallenges(homeId, true),
-        db.getProposals(homeId, 'voting'),
-        db.getMemberAchievements(currentMember.id),
-      ]);
-      
-      setChallenges(homeChallenges);
-      setProposals(homeProposals);
-      setAchievements(memberAchievements);
-    } catch (error) {
-      console.error('Error loading challenges:', error);
-      toast.error('Error al cargar desafíos');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [homeId, currentMember]);
+    await loadData(homeId, currentMember.id);
+  }, [homeId, currentMember, loadData]);
 
   useEffect(() => {
-    if (currentMember && homeId) {
-      loadData();
-    }
-  }, [currentMember, homeId, loadData]);
+    loadChallengesData();
+  }, [loadChallengesData]);
 
+  // Wrapper handlers that call store actions
   const handleJoinChallenge = async (challengeId: number) => {
     if (!currentMember) return;
-    
-    // Store for rollback
-    const prevChallenges = challenges;
-    
-    try {
-      // Optimistic update: update UI immediately
-      setChallenges(prev => prev.map(c => 
-        c.id === challengeId 
-          ? { ...c, participant_count: c.participant_count + 1 }
-          : c
-      ));
-      
-      // Persist to database
-      await db.joinChallenge(challengeId, currentMember.id);
-      toast.success('¡Te has unido al desafío!');
-      
-      // Check for achievements after joining
-      const unlockedAchievements = await db.checkAndUnlockAchievements(currentMember.id);
-      if (unlockedAchievements.length > 0) {
-        setTimeout(() => {
-          toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
-            description: unlockedAchievements[0].description,
-            duration: 5000,
-          });
-        }, 1000);
-      }
-      
-      // Reload for accuracy
-      await loadData();
-    } catch (error) {
-      console.error('Error joining challenge:', error);
-      toast.error('Error al unirse al desafío');
-      
-      // Rollback on error
-      setChallenges(prevChallenges);
-    }
+    await joinChallenge(challengeId, currentMember.id);
   };
 
   const handleCreateProposal = async () => {
-    if (!currentMember || !homeId || !proposalTitle || !hypothesis) {
-      toast.error('Completa todos los campos');
-      return;
-    }
-    
-    try {
-      await db.createProposal(homeId, currentMember.id, {
-        title: proposalTitle,
-        hypothesis: hypothesis,
-        status: 'voting',
-        votes_yes: 0,
-        votes_no: 0
-      });
-      
-      toast.success('Propuesta enviada');
-      setProposalTitle('');
-      setHypothesis('');
-      await loadData();
-    } catch (error) {
-      console.error('Error creating proposal:', error);
-      toast.error('Error al crear propuesta');
-    }
+    if (!currentMember || !homeId) return;
+    await createProposal(homeId, currentMember.id);
   };
 
   const handleVote = async (proposalId: number, vote: boolean) => {
     if (!currentMember) return;
-    
-    // Store for rollback
-    const prevProposals = proposals;
-    
-    try {
-      // Optimistic update
-      setProposals(prev => prev.map(p => 
-        p.id === proposalId
-          ? {
-              ...p,
-              votes_yes: vote ? p.votes_yes + 1 : p.votes_yes,
-              votes_no: !vote ? p.votes_no + 1 : p.votes_no
-            }
-          : p
-      ));
-      
-      // Persist to database
-      await db.voteProposal(proposalId, currentMember.id, vote);
-      toast.success(vote ? 'Voto a favor registrado' : 'Voto en contra registrado');
-      
-      // Reload for accuracy
-      await loadData();
-    } catch (error) {
-      console.error('Error voting:', error);
-      toast.error('Error al votar');
-      
-      // Rollback on error
-      setProposals(prevProposals);
-    }
+    await voteOnProposal(proposalId, currentMember.id, vote);
   };
 
   const getChallengeIcon = (iconName?: string) => {
@@ -166,6 +75,73 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
 
   const groupChallenges = challenges.filter(c => c.challenge_type === "group");
   const personalChallenges = challenges.filter(c => c.challenge_type === "personal");
+
+  const renderAchievements = (achievements: Achievement[], showAll: boolean) => {
+    const displayAchievements = showAll ? achievements : achievements.slice(0, 6);
+
+    if (achievements.length === 0) {
+      return (
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy className="w-5 h-5 text-[#d4a574]" />
+            <h3>Insignias</h3>
+          </div>
+          <div className="text-center py-8">
+            <div className="w-20 h-20 rounded-full bg-muted/30 flex items-center justify-center mx-auto mb-3">
+              <Trophy className="w-10 h-10 text-muted-foreground/50" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Completa tareas y alcanza metas para desbloquear insignias
+            </p>
+          </div>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-[#d4a574]" />
+            <h3>Trofeos desbloqueados</h3>
+          </div>
+          <Badge variant="secondary" className="bg-[#fef3e0] text-[#d4a574]">
+            {achievements.length}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {displayAchievements.map((achievement) => {
+            return (
+              <div
+                key={achievement.id}
+                className="flex flex-col items-center gap-2 p-4 rounded-lg bg-gradient-to-br from-[#fef3e0] to-[#e9f5f0] hover:shadow-md transition-shadow"
+              >
+                <div className="w-14 h-14 flex items-center justify-center">
+                  <Trophy className="w-14 h-14 text-[#d4a574]" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">{achievement.title}</p>
+                  {achievement.description && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {achievement.description}
+                    </p>
+                  )}
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                >
+                  {achievement.achievement_type === 'individual' && 'Personal'}
+                  {achievement.achievement_type === 'team' && 'Equipo'}
+                  {achievement.achievement_type === 'home' && 'Hogar'}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
 
   const renderChallenge = (challenge: ChallengeWithParticipants) => (
     <Card key={challenge.id} className="p-5">
@@ -400,7 +376,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
 
       {/* Achievements Section - visible for all levels */}
       <div className="mb-6">
-        <AchievementsSection achievements={achievements} showAll={masteryLevel === "master" || masteryLevel === "visionary"} />
+        {renderAchievements(achievements, masteryLevel === "master" || masteryLevel === "visionary")}
       </div>
 
       {/* Regular Challenges Tabs (for non-visionary) */}

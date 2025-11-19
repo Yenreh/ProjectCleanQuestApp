@@ -32,7 +32,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️  Supabase credentials not found. Using mock data mode.')
+  console.warn('Supabase credentials not found. Using mock data mode.')
 }
 
 export const supabase = supabaseUrl && supabaseAnonKey 
@@ -171,12 +171,14 @@ export const db = {
       home_id: data.id,
       user_id: userId,
       email: profile.email,
+      full_name: profile.full_name || profile.email.split('@')[0],
       role: 'owner',
       status: 'active',
       mastery_level: 'novice',
       weeks_active: 0,
       tasks_completed: 0,
-      current_streak: 0
+      current_streak: 0,
+      joined_at: new Date().toISOString()
     })
     
     if (memberError) throw memberError
@@ -570,7 +572,10 @@ export const db = {
     
     const { data, error } = await supabase
       .from('home_members')
-      .select('*')
+      .select(`
+        *,
+        profiles!home_members_user_id_fkey(full_name)
+      `)
       .eq('home_id', homeId)
       .eq('user_id', userId)
       .eq('status', 'active')
@@ -580,7 +585,12 @@ export const db = {
       if (error.code === 'PGRST116') return null // Not found
       throw error
     }
-    return data
+    
+    // Map the data to include full_name from profile
+    return {
+      ...data,
+      full_name: data.profiles?.full_name
+    }
   },
 
   async removeMember(memberId: number) {

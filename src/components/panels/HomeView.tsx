@@ -11,6 +11,7 @@ import { CompleteTaskDialog } from "../dialogs/CompleteTaskDialog";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
 import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../../lib/types";
+import { useAssignmentsStore, useHomeStore, useUIStore } from "../../stores";
 
 type MasteryLevel = "novice" | "solver" | "expert" | "master" | "visionary";
 
@@ -23,22 +24,42 @@ interface HomeScreenProps {
 }
 
 export const HomeView = memo(function HomeView({ masteryLevel, currentMember, currentUser, homeId, onLevelUpdate }: HomeScreenProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
-  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [currentTaskDialog, setCurrentTaskDialog] = useState<AssignmentWithDetails | null>(null);
-  const [completedStepsInDialog, setCompletedStepsInDialog] = useState<Set<number>>(new Set());
-  const [swapModalOpen, setSwapModalOpen] = useState(false);
-  const [taskToSwap, setTaskToSwap] = useState<AssignmentWithDetails | null>(null);
-  const [favoriteTasks, setFavoriteTasks] = useState<Set<number>>(new Set());
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [taskToCancel, setTaskToCancel] = useState<AssignmentWithDetails | null>(null);
-  const [availableTasksOpen, setAvailableTasksOpen] = useState(false);
+  // Store state
+  const {
+    assignments,
+    favoriteTasks,
+    isLoading,
+    currentTaskDialog,
+    completedStepsInDialog,
+    taskToSwap,
+    taskToCancel,
+    togglingStepId,
+    togglingFavoriteId,
+    loadAssignments,
+    openTaskDialog,
+    closeTaskDialog,
+    setTaskToSwap,
+    setTaskToCancel,
+    toggleStep,
+    completeTask,
+    completeTaskFromDialog,
+    toggleFavorite,
+  } = useAssignmentsStore();
   
-  // Loading states for actions
-  const [togglingStepId, setTogglingStepId] = useState<number | null>(null);
-  const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
+  // UI dialog states
+  const {
+    taskDialogOpen,
+    swapModalOpen,
+    cancelDialogOpen,
+    availableTasksOpen,
+    setTaskDialogOpen,
+    setSwapModalOpen,
+    setCancelDialogOpen,
+    setAvailableTasksOpen,
+  } = useUIStore();
+  
+  // Metrics from homeStore or local state (metrics is view-specific for now)
+  const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
   
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
 
@@ -51,342 +72,63 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
   const loadData = useCallback(async () => {
     if (!currentMember || !homeId) return;
     
-    setIsLoading(true);
     try {
-      const [myAssignments, homeMetrics, memberFavorites] = await Promise.all([
-        db.getMyAssignments(currentMember.id, 'pending'),
-        db.getHomeMetrics(homeId),
-        db.getMemberFavorites(currentMember.id)
-      ]);
+      // Use store action for assignments
+      await loadAssignments(currentMember.id, homeId);
       
-      // getMyAssignments already includes step completions count via batch loading
-      // No need to call getStepCompletions again - it's already optimized in db.ts
-      setAssignments(myAssignments);
+      // Load metrics locally (view-specific)
+      const homeMetrics = await db.getHomeMetrics(homeId);
       setMetrics(homeMetrics);
-      setFavoriteTasks(new Set(memberFavorites));
     } catch (error) {
       console.error('Error loading home data:', error);
       toast.error('Error al cargar tareas');
-    } finally {
-      setIsLoading(false);
     }
-  }, [currentMember, homeId]); // Only re-create when dependencies change
+  }, [currentMember, homeId, loadAssignments]);
 
-  const openTaskDialog = async (assignment: AssignmentWithDetails) => {
-    setCurrentTaskDialog(assignment);
-    
-    // Reload step completions from database to ensure fresh state
-    try {
-      const completions = await db.getStepCompletions(assignment.id);
-      const completedStepIds = completions.map((c: any) => c.step_id);
-      setCompletedStepsInDialog(new Set(completedStepIds));
-    } catch (error) {
-      console.error('Error loading step completions:', error);
-      // Fallback to cached data
-      const completedStepIds = (assignment as any).completed_step_ids || [];
-      setCompletedStepsInDialog(new Set(completedStepIds));
-    }
-    
-    setTaskDialogOpen(true);
-  };
-
+  // Wrapper for toggleStep with current context
   const handleToggleStep = async (stepId: number) => {
-    if (!currentTaskDialog || !currentMember || togglingStepId) return;
-
-    const isCompleted = completedStepsInDialog.has(stepId);
-    
-    // Store previous states for rollback on error
-    const prevCompletedSteps = new Set(completedStepsInDialog);
-    const prevTaskDialog = currentTaskDialog;
-    
-    setTogglingStepId(stepId);
-    
-    // Optimistic UI update
-    if (isCompleted) {
-      setCompletedStepsInDialog(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(stepId);
-        return newSet;
-      });
-      
-      setCurrentTaskDialog(prev => {
-        if (!prev) return prev;
-        const currentIds = (prev as any).completed_step_ids || [];
-        return {
-          ...prev,
-          completed_step_ids: currentIds.filter((id: number) => id !== stepId)
-        } as any;
-      });
-      
-      updateAssignmentProgress(currentTaskDialog.id, stepId, false);
-    } else {
-      setCompletedStepsInDialog(prev => new Set([...prev, stepId]));
-      
-      setCurrentTaskDialog(prev => {
-        if (!prev) return prev;
-        const currentIds = (prev as any).completed_step_ids || [];
-        return {
-          ...prev,
-          completed_step_ids: [...currentIds, stepId]
-        } as any;
-      });
-      
-      updateAssignmentProgress(currentTaskDialog.id, stepId, true);
-    }
-    
-    try {
-      // Persist to database
-      if (isCompleted) {
-        await db.uncompleteTaskStep(stepId, currentTaskDialog.id);
-        toast.success('Paso desmarcado');
-      } else {
-        await db.completeTaskStep(stepId, currentTaskDialog.id, currentMember.id);
-        toast.success('Paso completado');
-      }
-    } catch (error) {
-      console.error('Error toggling step:', error);
-      toast.error('Error al actualizar paso');
-      
-      // Rollback on error
-      setCompletedStepsInDialog(prevCompletedSteps);
-      setCurrentTaskDialog(prevTaskDialog);
-      updateAssignmentProgress(currentTaskDialog.id, stepId, !isCompleted);
-    } finally {
-      setTogglingStepId(null);
-    }
-  };
-
-  const updateAssignmentProgress = async (assignmentId: number, stepId?: number, isCompleting: boolean = true) => {
-    try {
-      const assignment = assignments.find(a => a.id === assignmentId);
-      if (!assignment || !assignment.task_steps || assignment.task_steps.length === 0) return;
-
-      // Calculate new progress based on action
-      const currentCompletedSteps = (assignment as any).completed_steps_count || 0;
-      const newCompletedStepsCount = stepId 
-        ? (isCompleting ? currentCompletedSteps + 1 : currentCompletedSteps - 1)
-        : currentCompletedSteps;
-      
-      // For required steps, we need to check if the step is required
-      let completedRequiredCount = (assignment as any).completed_required_steps || 0;
-      if (stepId) {
-        const step = assignment.task_steps.find(s => s.id === stepId);
-        if (step && !step.is_optional) {
-          completedRequiredCount = isCompleting ? completedRequiredCount + 1 : completedRequiredCount - 1;
-        }
-      }
-
-      // Update completed_step_ids array
-      const currentCompletedIds = (assignment as any).completed_step_ids || [];
-      let newCompletedIds = [...currentCompletedIds];
-      if (stepId) {
-        if (isCompleting) {
-          if (!newCompletedIds.includes(stepId)) {
-            newCompletedIds.push(stepId);
-          }
-        } else {
-          newCompletedIds = newCompletedIds.filter(id => id !== stepId);
-        }
-      }
-
-      const requiredSteps = assignment.task_steps.filter(s => !s.is_optional);
-
-      // Update assignment in state with all cached fields
-      setAssignments(prev => prev.map(a => 
-        a.id === assignmentId 
-          ? {
-              ...a,
-              completed_steps_count: Math.max(0, newCompletedStepsCount),
-              completed_required_steps: Math.max(0, completedRequiredCount),
-              total_required_steps: requiredSteps.length,
-              has_partial_progress: newCompletedStepsCount > 0,
-              completed_step_ids: newCompletedIds
-            } as any
-          : a
-      ));
-    } catch (error) {
-      console.error('Error updating assignment progress:', error);
-    }
-  };
-
-  // Helper function to show toasts sequentially without overlap
-  const showCompletionToasts = async (memberId: number, delayOffset = 0) => {
-    const levelNames = {
-      'solver': 'Solucionador',
-      'expert': 'Experto',
-      'master': 'Maestro',
-      'visionary': 'Visionario'
-    };
-
-    // Base toast
-    toast.success('¡Tarea completada!');
-    
-    // Check for level up
-    const newLevel = await db.updateMasteryLevel(memberId);
-    let hasLevelUp = false;
-    
-    if (newLevel) {
-      hasLevelUp = true;
-      onLevelUpdate?.(newLevel);
-      setTimeout(() => {
-        toast.success(`🎉 ¡Subiste de nivel a ${levelNames[newLevel as keyof typeof levelNames]}!`, {
-          description: 'Ahora tienes acceso a nuevas funciones',
-          duration: 4000,
-        });
-      }, 800 + delayOffset);
-    }
-    
-    // Check for unlocked achievements
-    const unlockedAchievements = await db.checkAndUnlockAchievements(memberId);
-    if (unlockedAchievements.length > 0) {
-      setTimeout(() => {
-        toast.success(`🏆 ¡Insignia desbloqueada: ${unlockedAchievements[0].title}!`, {
-          description: unlockedAchievements[0].description,
-          duration: 4000,
-        });
-      }, hasLevelUp ? 1800 + delayOffset : 1000 + delayOffset);
-    }
-  };
-
-  const handleCompleteTaskFromDialog = async () => {
     if (!currentTaskDialog || !currentMember) return;
+    await toggleStep(stepId, currentTaskDialog, currentMember.id);
+  };
 
-    // Only check required (non-optional) steps
-    const requiredSteps = currentTaskDialog.task_steps?.filter(step => !step.is_optional) || [];
-    const requiredStepIds = new Set(requiredSteps.map(step => step.id));
-    const completedRequiredSteps = Array.from(completedStepsInDialog).filter(id => requiredStepIds.has(id));
+  // Wrapper for onLevelUpdate callback
+  const handleLevelUpdate = (newLevel: MasteryLevel) => {
+    onLevelUpdate?.(newLevel);
+  };
 
-    if (requiredSteps.length > 0 && completedRequiredSteps.length < requiredSteps.length) {
-      toast.error(`Completa todos los pasos obligatorios (${completedRequiredSteps.length}/${requiredSteps.length})`);
-      return;
-    }
-
-    // Store for rollback
-    const prevAssignments = assignments;
-    const prevMetrics = metrics;
-    const taskToComplete = currentTaskDialog;
-
-    try {
-      // Optimistic UI update: remove completed task from state
-      setAssignments(prev => prev.filter(a => a.id !== currentTaskDialog.id));
-      
-      // Update metrics optimistically
-      setMetrics(prev => prev ? {
-        ...prev,
-        completed_tasks: prev.completed_tasks + 1,
-        pending_tasks: Math.max(0, prev.pending_tasks - 1),
-        completion_percentage: Math.round(((prev.completed_tasks + 1) / prev.total_tasks) * 100)
-      } : null);
-      
-      // Close dialog immediately for better UX
-      setTaskDialogOpen(false);
-      setCurrentTaskDialog(null);
-      setCompletedStepsInDialog(new Set());
-      
-      // Persist to database
-      await db.completeTask(taskToComplete.id, currentMember.id);
-      
-      // Show completion toasts sequentially
-      await showCompletionToasts(currentMember.id);
-      
-      // Reload metrics in background for accuracy
-      if (homeId) {
-        db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
-      }
-    } catch (error) {
-      console.error('Error completing task:', error);
-      toast.error('Error al completar tarea');
-      
-      // Rollback on error
-      setAssignments(prevAssignments);
-      setMetrics(prevMetrics);
-      setCurrentTaskDialog(taskToComplete);
+  // Wrapper for completing task from dialog
+  const handleCompleteTaskFromDialog = async () => {
+    if (!currentMember || !homeId) return;
+    await completeTaskFromDialog(currentMember.id, homeId);
+    // Reload metrics after completion
+    if (homeId) {
+      db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
     }
   };
 
+  // Wrapper for completing task directly
   const handleCompleteTask = async (assignmentId: number) => {
-    if (!currentMember) return;
-    
-    // Store for rollback
-    const prevAssignments = assignments;
-    const prevMetrics = metrics;
-    
-    try {
-      // Optimistic UI update: remove completed task from state
-      setAssignments(prev => prev.filter(a => a.id !== assignmentId));
-      
-      // Update metrics optimistically
-      setMetrics(prev => prev ? {
-        ...prev,
-        completed_tasks: prev.completed_tasks + 1,
-        pending_tasks: Math.max(0, prev.pending_tasks - 1),
-        completion_percentage: Math.round(((prev.completed_tasks + 1) / prev.total_tasks) * 100)
-      } : null);
-      
-      // Persist to database
-      await db.completeTask(assignmentId, currentMember.id);
-      
-      // Show completion toasts sequentially
-      await showCompletionToasts(currentMember.id);
-      
-      // Reload metrics in background for accuracy
-      if (homeId) {
-        db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
-      }
-    } catch (error) {
-      console.error('Error completing task:', error);
-      toast.error('Error al completar tarea');
-      
-      // Rollback on error
-      setAssignments(prevAssignments);
-      setMetrics(prevMetrics);
+    if (!currentMember || !homeId) return;
+    await completeTask(assignmentId, currentMember.id, homeId);
+    // Reload metrics after completion
+    if (homeId) {
+      db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
     }
   };
 
+  // Wrapper for toggle favorite
   const handleToggleFavorite = async (taskId: number) => {
-    if (!currentMember || togglingFavoriteId) return;
-
-    const isFavorite = favoriteTasks.has(taskId);
-    const prevFavorites = new Set(favoriteTasks);
-    
-    setTogglingFavoriteId(taskId);
-    
-    // Optimistic UI update
-    if (isFavorite) {
-      setFavoriteTasks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(taskId);
-        return newSet;
-      });
-    } else {
-      setFavoriteTasks(prev => new Set([...prev, taskId]));
-    }
-    
-    try {
-      // Persist to database
-      if (isFavorite) {
-        await db.removeTaskFavorite(taskId, currentMember.id);
-        toast.success('Quitado de favoritos');
-      } else {
-        await db.addTaskFavorite(taskId, currentMember.id);
-        toast.success('Agregado a favoritos');
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-      toast.error('Error al actualizar favorito');
-      
-      // Rollback on error
-      setFavoriteTasks(prevFavorites);
-    } finally {
-      setTogglingFavoriteId(null);
-    }
+    if (!currentMember) return;
+    await toggleFavorite(taskId, currentMember.id);
   };
 
+  // Wrapper for opening swap modal
   const handleOpenSwapModal = (assignment: AssignmentWithDetails) => {
     setTaskToSwap(assignment);
     setSwapModalOpen(true);
   };
 
+  // Wrapper for swap task request
   const handleSwapTask = async (targetAssignmentId: number) => {
     if (!taskToSwap || !currentMember) return;
 
@@ -539,10 +281,11 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         size="lg" 
         className="w-full mb-6 h-14 bg-[#6fbd9d] hover:bg-[#5fa989]"
         disabled={assignments.length === 0 || !assignments.some(a => a.status === 'pending')}
-        onClick={() => {
+        onClick={async () => {
           const firstPendingTask = assignments.find(a => a.status === 'pending');
           if (firstPendingTask) {
-            openTaskDialog(firstPendingTask);
+            await openTaskDialog(firstPendingTask);
+            setTaskDialogOpen(true);
           }
         }}
       >
@@ -588,9 +331,10 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
                     <div className="flex items-center gap-2">
                       <span 
                         className={`cursor-pointer ${assignment.status === 'completed' ? 'text-muted-foreground line-through' : ''}`}
-                        onClick={() => {
+                        onClick={async () => {
                           if (assignment.status !== 'completed') {
-                            openTaskDialog(assignment);
+                            await openTaskDialog(assignment);
+                            setTaskDialogOpen(true);
                           }
                         }}
                       >
@@ -705,15 +449,15 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
       {/* Task Details Dialog */}
       <CompleteTaskDialog
         open={taskDialogOpen}
-        onOpenChange={setTaskDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeTaskDialog();
+        }}
         task={currentTaskDialog}
         completedSteps={completedStepsInDialog}
         onToggleStep={handleToggleStep}
         onCompleteTask={handleCompleteTaskFromDialog}
         onClose={() => {
-          setTaskDialogOpen(false);
-          setCurrentTaskDialog(null);
-          setCompletedStepsInDialog(new Set());
+          closeTaskDialog();
         }}
         getTaskIcon={getTaskIcon}
         togglingStepId={togglingStepId}
@@ -794,20 +538,13 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         assignment={taskToCancel}
         memberId={currentMember?.id || 0}
         onSuccess={async () => {
-          // Optimistic UI update: remove cancelled task
-          if (taskToCancel) {
-            setAssignments(prev => prev.filter(a => a.id !== taskToCancel.id));
-            setMetrics(prev => prev ? {
-              ...prev,
-              pending_tasks: Math.max(0, prev.pending_tasks - 1)
-            } : null);
+          // Reload assignments after cancellation
+          if (currentMember && homeId) {
+            await loadAssignments(currentMember.id, homeId);
+            const homeMetrics = await db.getHomeMetrics(homeId);
+            setMetrics(homeMetrics);
           }
           setTaskToCancel(null);
-          
-          // Reload only metrics in background
-          if (homeId) {
-            db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
-          }
         }}
       />
 
@@ -820,11 +557,9 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
         onTaskTaken={async () => {
           // Reload assignments to show new task
           if (currentMember && homeId) {
-            const myAssignments = await db.getMyAssignments(currentMember.id, 'pending');
-            setAssignments(myAssignments);
-            
-            // Update metrics in background
-            db.getHomeMetrics(homeId).then(setMetrics).catch(console.error);
+            await loadAssignments(currentMember.id, homeId);
+            const homeMetrics = await db.getHomeMetrics(homeId);
+            setMetrics(homeMetrics);
           }
         }}
       />

@@ -6,6 +6,7 @@ import { Label } from "../ui/label"
 import { Sparkles, Mail, Lock, User, UserPlus } from "lucide-react"
 import { db } from "../../lib/db"
 import { toast } from "sonner"
+import { useAuthStore, useInvitationStore } from "../../stores"
 
 interface AuthScreenProps {
   onSuccess: () => void;
@@ -13,11 +14,16 @@ interface AuthScreenProps {
 }
 
 export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
+  // Local form state (UI-specific, no need to store globally)
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
-  const [loading, setLoading] = useState(false)
+  
+  // Use authStore for loading state
+  const { isLoading, signIn, signUp } = useAuthStore()
+  
+  // Invitation state (could also be from invitationStore if needed)
   const [invitationInfo, setInvitationInfo] = useState<any>(null)
 
   const loadInvitationInfo = useCallback(async () => {
@@ -44,22 +50,19 @@ export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
 
     try {
       if (isLogin) {
-        await db.signIn(email, password)
+        await signIn(email, password)
         toast.success("¡Bienvenido de vuelta!")
       } else {
-        await db.signUp(email, password, fullName)
+        await signUp(email, password, fullName)
         toast.success("¡Cuenta creada!")
       }
       onSuccess()
     } catch (error: any) {
       console.error("Auth error:", error)
       toast.error(error.message || "Error en la autenticación")
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -149,9 +152,9 @@ export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
           <Button
             type="submit"
             className="w-full h-12 bg-[#6fbd9d] hover:bg-[#5fa989] mt-6"
-            disabled={loading}
+            disabled={isLoading}
           >
-            {loading
+            {isLoading
               ? "Cargando..."
               : isLogin
               ? "Iniciar sesión"

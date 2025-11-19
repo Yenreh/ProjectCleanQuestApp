@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { toast } from "sonner";
+import { useUnifiedSettingsStore } from "../../stores";
 import type { HomeMember } from "../../lib/types";
 
 interface GeneralSettingsDialogProps {
@@ -42,99 +41,80 @@ export function GeneralSettingsDialog({
   currentMember, 
   onUpdate 
 }: GeneralSettingsDialogProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Reminder settings
-  const [reminderEnabled, setReminderEnabled] = useState(true);
-  const [reminderTime, setReminderTime] = useState("09:00");
-  const [reminderDays, setReminderDays] = useState([1, 2, 3, 4, 5]);
-
-  // Appearance settings
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
-  const [fontSize, setFontSize] = useState("medium");
-
-  // Notification preferences
-  const [taskNotifications, setTaskNotifications] = useState(true);
-  const [challengeNotifications, setChallengeNotifications] = useState(true);
-  const [achievementNotifications, setAchievementNotifications] = useState(true);
-  const [weeklyReport, setWeeklyReport] = useState(true);
+  const {
+    reminderEnabled,
+    reminderTime,
+    reminderDays,
+    theme,
+    fontSize,
+    taskNotifications,
+    challengeNotifications,
+    achievementNotifications,
+    weeklyReport,
+    isSavingPreferences,
+    setReminderEnabled,
+    setReminderTime,
+    setReminderDays,
+    setTheme,
+    setFontSize,
+    setTaskNotifications,
+    setChallengeNotifications,
+    setAchievementNotifications,
+    setWeeklyReport,
+    saveReminders,
+    saveAppearance,
+    saveNotifications,
+    toggleReminderDay,
+    resetUserPreferences,
+    clearCache,
+    exportData,
+  } = useUnifiedSettingsStore();
 
   const handleSaveReminders = async () => {
     if (!currentMember) return;
-
-    setIsLoading(true);
+    
     try {
-      toast.info("Función en desarrollo");
+      await saveReminders();
       onUpdate?.();
     } catch (error) {
-      console.error('Error saving reminders:', error);
-      toast.error("Error al guardar recordatorios");
-    } finally {
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
   const handleSaveAppearance = async () => {
-    setIsLoading(true);
     try {
-      toast.info("Función en desarrollo");
+      await saveAppearance();
       onUpdate?.();
     } catch (error) {
-      console.error('Error saving appearance:', error);
-      toast.error("Error al guardar apariencia");
-    } finally {
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
   const handleSaveNotifications = async () => {
     if (!currentMember) return;
-
-    setIsLoading(true);
+    
     try {
-      toast.info("Función en desarrollo");
+      await saveNotifications();
       onUpdate?.();
     } catch (error) {
-      console.error('Error saving notifications:', error);
-      toast.error("Error al guardar notificaciones");
-    } finally {
-      setIsLoading(false);
+      // Error already handled in store
     }
   };
 
   const handleExportData = () => {
-    toast.info("Función en desarrollo: exportar datos");
+    exportData();
   };
 
   const handleClearCache = () => {
-    if (confirm('¿Limpiar la caché local?')) {
-      localStorage.clear();
-      sessionStorage.clear();
-      toast.success("Caché limpiada");
-    }
+    clearCache();
   };
 
   const handleResetSettings = () => {
-    if (confirm('¿Restablecer toda la configuración?')) {
-      setReminderEnabled(true);
-      setReminderTime("09:00");
-      setReminderDays([1, 2, 3, 4, 5]);
-      setTheme("system");
-      setFontSize("medium");
-      setTaskNotifications(true);
-      setChallengeNotifications(true);
-      setAchievementNotifications(true);
-      setWeeklyReport(true);
-      toast.success("Configuración restablecida");
-    }
+    resetUserPreferences();
   };
 
   const toggleDay = (day: number) => {
-    setReminderDays(prev => 
-      prev.includes(day) 
-        ? prev.filter(d => d !== day) 
-        : [...prev, day].sort()
-    );
+    toggleReminderDay(day);
   };
 
   const getDayName = (day: number) => {
@@ -229,10 +209,10 @@ export function GeneralSettingsDialog({
 
               <Button 
                 onClick={handleSaveReminders} 
-                disabled={isLoading}
+                disabled={isSavingPreferences}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSavingPreferences && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Guardar recordatorios
               </Button>
             </div>
@@ -282,7 +262,7 @@ export function GeneralSettingsDialog({
 
               <div>
                 <Label htmlFor="font-size" className="text-sm">Tamaño de fuente</Label>
-                <Select value={fontSize} onValueChange={(v: string) => setFontSize(v)}>
+                <Select value={fontSize} onValueChange={(v: string) => setFontSize(v as "small" | "medium" | "large")}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -296,10 +276,10 @@ export function GeneralSettingsDialog({
 
               <Button 
                 onClick={handleSaveAppearance} 
-                disabled={isLoading}
+                disabled={isSavingPreferences}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSavingPreferences && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Aplicar cambios
               </Button>
             </div>
@@ -374,10 +354,10 @@ export function GeneralSettingsDialog({
 
               <Button 
                 onClick={handleSaveNotifications} 
-                disabled={isLoading}
+                disabled={isSavingPreferences}
                 className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
               >
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSavingPreferences && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Guardar preferencias
               </Button>
             </div>

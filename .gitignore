@@ -114,3 +114,6 @@ package-lock.json
 dist-ssr/
 *.tsbuildinfo
 .vite/
+
+# Ignore docs
+docs/*

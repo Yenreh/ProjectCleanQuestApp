@@ -996,6 +996,14 @@
     border-color: oklab(75.4057% .0331773 .0785563 / .2);
   }
 
+  .border-\[\#4a9d72\]\/20 {
+    border-color: #4a9d7233;
+  }
+
+  .border-\[\#9b7cb8\]\/20 {
+    border-color: #9b7cb833;
+  }
+
   .border-border {
     border-color: var(--border);
   }
@@ -1030,6 +1038,14 @@
 
   .bg-\[\#d4a574\] {
     background-color: #d4a574;
+  }
+
+  .bg-\[\#d4f0e3\] {
+    background-color: #d4f0e3;
+  }
+
+  .bg-\[\#e8dff0\] {
+    background-color: #e8dff0;
   }
 
   .bg-\[\#e9f5f0\] {
@@ -1349,6 +1365,14 @@
 
   .text-\[\#d4a574\] {
     color: #d4a574;
+  }
+
+  .text-\[\#4a9d72\] {
+    color: #4a9d72;
+  }
+
+  .text-\[\#9b7cb8\] {
+    color: #9b7cb8;
   }
 
   .text-\[\#d97706\] {

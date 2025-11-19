@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -10,9 +10,8 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { AlertCircle, User, Calendar, CheckCircle2, Loader2 } from "lucide-react";
-import { db } from "../../lib/db";
+import { useAssignmentsStore } from "../../stores";
 import { toast } from "sonner";
-import type { CancelledTaskWithDetails } from "../../lib/types";
 
 interface AvailableTasksDialogProps {
   open: boolean;
@@ -29,50 +28,34 @@ export function AvailableTasksDialog({
   currentMemberId,
   onTaskTaken,
 }: AvailableTasksDialogProps) {
-  const [tasks, setTasks] = useState<CancelledTaskWithDetails[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [takingTaskId, setTakingTaskId] = useState<string | null>(null);
-
-  const loadTasks = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const availableTasks = await db.getAvailableCancelledTasks(homeId);
-      setTasks(availableTasks);
-    } catch (error) {
-      console.error("Error loading available tasks:", error);
-      toast.error("Error al cargar tareas disponibles");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [homeId]);
+  const { 
+    availableTasks, 
+    isLoadingAvailable, 
+    takingTaskId,
+    loadAvailableTasks,
+    takeCancelledTask 
+  } = useAssignmentsStore();
 
   useEffect(() => {
     if (open) {
-      loadTasks();
+      loadAvailableTasks(homeId);
     }
-  }, [open, homeId, loadTasks]);
+  }, [open, homeId, loadAvailableTasks]);
 
   const handleTakeTask = async (cancellationId: number, taskId: number, taskTitle: string) => {
-    const uniqueId = cancellationId === 0 ? `unassigned-${taskId}` : `cancelled-${cancellationId}`;
-    setTakingTaskId(uniqueId);
-
     try {
-      await db.takeCancelledTask(cancellationId, currentMemberId, taskId);
-
+      await takeCancelledTask(cancellationId, currentMemberId, taskId);
       toast.success(`Has tomado la tarea: ${taskTitle}`, {
         description: "Ahora aparecerá en tu lista de tareas pendientes",
       });
-
-      await loadTasks();
+      
+      await loadAvailableTasks(homeId);
 
       if (onTaskTaken) {
         onTaskTaken();
       }
     } catch (error) {
-      console.error("Error taking task:", error);
-      toast.error("Error al tomar la tarea");
-    } finally {
-      setTakingTaskId(null);
+      // Error already handled in store
     }
   };
 
@@ -96,12 +79,12 @@ export function AvailableTasksDialog({
 
         <div className="flex-1 overflow-y-auto px-1">
           <div className="space-y-3 mt-4">
-          {isLoading ? (
+          {isLoadingAvailable ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="w-8 h-8 text-[#6fbd9d] animate-spin mb-4" />
               <p className="text-sm text-muted-foreground">Cargando...</p>
             </div>
-          ) : tasks.length === 0 ? (
+          ) : availableTasks.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mx-auto mb-3">
                 <CheckCircle2 className="w-8 h-8 text-muted-foreground/50" />
@@ -111,7 +94,7 @@ export function AvailableTasksDialog({
               </p>
             </div>
           ) : (
-            tasks.map((task) => (
+            availableTasks.map((task) => (
               <Card key={task.cancellation_id === 0 ? `unassigned-${task.task_id}` : `cancelled-${task.cancellation_id}`} className="p-4">
                 <div className="flex gap-3">
                   <div className="flex-1 min-w-0">
@@ -178,7 +161,7 @@ export function AvailableTasksDialog({
             ))
           )}
           
-          {tasks.length > 0 && (
+          {availableTasks.length > 0 && (
             <div className="mt-4 p-3 bg-[#f0f7ff] rounded-lg text-sm text-muted-foreground">
               <p>
                 💡 Al tomar una tarea, esta se asignará a ti y desaparecerá de la lista de disponibles.
