@@ -56,26 +56,28 @@ npm run preview      # Preview del build
 ```
 CleanQuestApp/
 ├── scripts/              # Scripts SQL para Supabase
-│   ├── 01-create-tables.sql
-│   ├── 02-seed-data.sql
-│   ├── 03-functions.sql
-│   └── 05-reset-database.sql
 ├── src/
 │   ├── components/
-│   │   ├── dialogs/     # Modales
-│   │   ├── panels/      # Vistas principales
-│   │   ├── sections/    # Secciones reutilizables
-│   │   └── ui/          # Componentes UI base
-│   ├── lib/
-│   │   ├── db.ts        # Cliente Supabase y queries
-│   │   ├── types.ts     # Tipos TypeScript
-│   │   └── masteryService.ts
-│   ├── styles/
+│   │   ├── dialogs/              # Modales y diálogos
+│   │   │   └── home-management/  # Tabs de gestión del hogar
+│   │   ├── panels/               # Vistas principales
+│   │   ├── sections/             # Pasos del onboarding
+│   │   └── ui/                   # Componentes base (shadcn/ui)
+│   ├── hooks/                    # Custom hooks
+│   ├── lib/                      # Utilidades y servicios
+│   │   ├── db.ts                 # Cliente Supabase
+│   │   ├── types.ts              # Tipos TypeScript
+│   │   ├── notifications.ts      # Sistema de notificaciones
+│   │   └── masteryService.ts     # Lógica de maestría
+│   ├── stores/                   # Estado global (Zustand)
+│   ├── styles/                   # Estilos globales
 │   ├── App.tsx
 │   └── main.tsx
-├── .env.local           # Variables de entorno (no commitear)
+├── .env.local
 ├── package.json
-└── vite.config.ts
+├── tsconfig.json
+├── vite.config.ts
+└── vercel.json
 ```
 
 ## Stack Técnico
