@@ -174,7 +174,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           const newCompletedSteps = new Set([...completedSteps, "create-home" as Step]);
           set({ 
             completedSteps: newCompletedSteps,
-            currentStep: "add-tasks"
+            currentStep: "add-roommates"
           });
           
           toast.success("¡Casa creada, bienvenido! 🏡");
@@ -259,11 +259,17 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       // Skip roommates step
       skipRoommates: () => {
+        const { roommates } = get();
+        
         set(state => ({
           completedSteps: new Set([...state.completedSteps, "add-roommates" as Step]),
           currentStep: "add-tasks"
         }));
-        toast.info("Puedes invitar roomies más tarde desde Configuración");
+        
+        // Solo mostrar el mensaje si no se crearon invitaciones
+        if (roommates.length === 0) {
+          toast.info("Puedes invitar roomies más tarde desde Configuración");
+        }
       },
 
       // Toggle task selection

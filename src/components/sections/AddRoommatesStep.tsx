@@ -105,17 +105,9 @@ export function AddRoommatesStep() {
         <div className="flex gap-2">
           <Button
             onClick={handleCompleteRoommates}
-            variant="outline"
-            className="flex-1"
+            className="w-full bg-[#3c88cf] hover:bg-[#7996b3]"
           >
-            Saltar por ahora
-          </Button>
-          <Button
-            onClick={handleCompleteRoommates}
-            disabled={roommates.length === 0}
-            className="flex-1 bg-[#89a7c4] hover:bg-[#7996b3] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Continuar
+            {roommates.length === 0 ? 'Continuar sin invitar' : 'Continuar'}
           </Button>
         </div>
       </div>
