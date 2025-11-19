@@ -56,8 +56,8 @@ export default function App() {
     processInvitation,
     acceptHomeChange,
     declineHomeChange,
-    checkUrlForInvitation,
-    clearInvitationData
+    clearInvitationData,
+    checkPendingInvitationByEmail
   } = useInvitationStore();
   const {
     currentScreen,
@@ -79,11 +79,6 @@ export default function App() {
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
   const userInitials = userName.substring(0, 2).toUpperCase();
 
-  // Check for invitation token in URL on mount
-  useEffect(() => {
-    checkUrlForInvitation();
-  }, []);
-
   // Setup notifications when user email changes
   useEffect(() => {
     if (currentUser?.email) {
@@ -92,6 +87,23 @@ export default function App() {
       setUserEmail(null);
     }
   }, [currentUser?.email]);
+
+  // Check for pending invitations when currentUser is loaded
+  useEffect(() => {
+    const checkInvitations = async () => {
+      if (!currentUser?.email) return;
+      
+      const { currentHome } = useHomeStore.getState();
+      const { currentMember } = useMembersStore.getState();
+      
+      // Only check if user has no home
+      if (currentHome || currentMember) return;
+      
+      await checkPendingInvitationByEmail(currentUser.email);
+    };
+    
+    checkInvitations();
+  }, [currentUser?.email, checkPendingInvitationByEmail]);
 
   // Check authentication on mount
   useEffect(() => {
@@ -126,12 +138,10 @@ export default function App() {
         setHasCompletedOnboarding(true);
       } else {
         console.log('App: No home or member found, checking invitations...');
-        // Check if there's a pending invitation
-        const pendingToken = invitationToken || localStorage.getItem('pending_invitation');
-        
-        if (pendingToken) {
+        // Check if there's a pending invitation from store
+        if (invitationToken) {
           try {
-            const invitationInfo = await db.getInvitationByToken(pendingToken);
+            const invitationInfo = await db.getInvitationByToken(invitationToken);
             if (invitationInfo) {
               const { member, home } = await db.getUserHomeMembership(userId);
               const ownerName = invitationInfo.homes.profiles?.full_name || invitationInfo.homes.profiles?.email;
@@ -152,7 +162,7 @@ export default function App() {
               
               setChangeHomeData({
                 invitationId: invitationInfo.id,
-                token: pendingToken,
+                token: invitationToken,
                 currentHomeName: member && home ? home.name : null,
                 currentHomeOwner,
                 newHomeName: invitationInfo.homes.name,
@@ -170,29 +180,8 @@ export default function App() {
           }
         }
         
-        // Check by email if no home
-        if (currentUser?.email) {
-          try {
-            const emailInvitation = await db.getPendingInvitationByEmail(currentUser.email);
-            if (emailInvitation && emailInvitation.invitation_token) {
-              const ownerName = emailInvitation.homes.profiles?.full_name || emailInvitation.homes.profiles?.email;
-              setChangeHomeData({
-                invitationId: emailInvitation.id,
-                token: emailInvitation.invitation_token,
-                currentHomeName: null,
-                currentHomeOwner: undefined,
-                newHomeName: emailInvitation.homes.name,
-                newHomeOwner: ownerName
-              });
-              setShowChangeHomeDialog(true);
-              return;
-            }
-          } catch (error) {
-            console.error('Error checking email invitation:', error);
-          }
-        }
-        
-        console.log('App: No invitations found, keeping in onboarding');
+        // Email invitation check is now handled by useEffect watching currentUser
+        console.log('App: No token invitation found, keeping in onboarding');
         setHasCompletedOnboarding(false);
       }
     } catch (error) {

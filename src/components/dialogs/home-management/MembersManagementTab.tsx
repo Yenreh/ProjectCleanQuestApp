@@ -1,4 +1,4 @@
-import { UserPlus, Edit, Trash2, Crown, Shield, User as UserIcon, Loader2, Link2, Key } from "lucide-react";
+import { UserPlus, Edit, Trash2, Crown, Shield, User as UserIcon, Loader2, Key } from "lucide-react";
 import { useEffect } from "react";
 import { Button } from "../../ui/button";
 import { Card } from "../../ui/card";
@@ -59,7 +59,6 @@ export function MembersManagementTab({ homeId, currentMember, onUpdate }: Member
     sendInvite,
     revokeInvitation,
     loadInvitations,
-    copyInvitationLink,
     copyInvitationToken,
   } = useInvitationStore();
 
@@ -213,17 +212,7 @@ export function MembersManagementTab({ homeId, currentMember, onUpdate }: Member
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex-1 h-7 text-xs"
-                            onClick={() => copyInvitationLink(inv.invitation_token)}
-                            disabled={loadingInvitations}
-                          >
-                            <Link2 className="w-3 h-3 mr-1" />
-                            Copiar enlace
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 h-7 text-xs"
+                            className="w-full h-7 text-xs"
                             onClick={() => copyInvitationToken(inv.invitation_token)}
                             disabled={loadingInvitations}
                           >

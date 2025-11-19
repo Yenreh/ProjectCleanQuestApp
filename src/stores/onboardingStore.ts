@@ -17,12 +17,11 @@ interface TaskTemplate {
 }
 
 interface Roommate {
-  id?: string;
+  id: number;
   email: string;
   role: string;
   status: string;
-  invite_link?: string;
-  token?: string;
+  token: string;
 }
 
 interface OnboardingState {
@@ -33,7 +32,7 @@ interface OnboardingState {
   // Step A: Create Home
   homeName: string;
   memberCount: string;
-  selectedZones: string[];
+  selectedZones: Array<string | { name: string; icon: string }>;
   reminderTime: string;
   
   // Step B: Roommates
@@ -43,7 +42,7 @@ interface OnboardingState {
   // Step C: Tasks
   taskTemplates: TaskTemplate[];
   selectedTasks: number[];
-  zones: string[];
+  zones: Array<string | { name: string; icon: string }>;
   
   // Persisted data
   createdHomeId: number | null;
@@ -161,11 +160,15 @@ export const useOnboardingStore = create<OnboardingState>()(
 
           // Create selected zones in backend - parallel execution
           await Promise.all(
-            selectedZones.map(zone =>
-              db.createZone(created.id, { name: zone, icon: zone }).catch(zErr => {
+            selectedZones.map((zone: string | { name: string; icon: string }) => {
+              // Handle both string and object formats
+              const zoneName = typeof zone === 'string' ? zone : zone.name;
+              const zoneIcon = typeof zone === 'string' ? zone : zone.icon;
+              
+              return db.createZone(created.id, { name: zoneName, icon: zoneIcon }).catch(zErr => {
                 console.warn('Zone create error', zErr);
-              })
-            )
+              });
+            })
           );
 
           const newCompletedSteps = new Set([...completedSteps, "create-home" as Step]);
@@ -182,12 +185,21 @@ export const useOnboardingStore = create<OnboardingState>()(
       },
 
       // Toggle zone selection
-      toggleZone: (zone: string) => {
-        set(state => ({
-          selectedZones: state.selectedZones.includes(zone)
-            ? state.selectedZones.filter(z => z !== zone)
-            : [...state.selectedZones, zone]
-        }));
+      toggleZone: (zone: string | { name: string; icon: string }) => {
+        set(state => {
+          const zoneName = typeof zone === 'string' ? zone : zone.name;
+          const existing = state.selectedZones.find(z => 
+            (typeof z === 'string' ? z : z.name) === zoneName
+          );
+          
+          return {
+            selectedZones: existing
+              ? state.selectedZones.filter(z => 
+                  (typeof z === 'string' ? z : z.name) !== zoneName
+                )
+              : [...state.selectedZones, zone]
+          };
+        });
       },
 
       // Add roommate via invitation
@@ -216,7 +228,6 @@ export const useOnboardingStore = create<OnboardingState>()(
               email: newEmail, 
               role: "Miembro", 
               status: "Pendiente",
-              invite_link: result.invite_link,
               token: result.invitation_token
             }],
             newEmail: ""
@@ -229,11 +240,11 @@ export const useOnboardingStore = create<OnboardingState>()(
         }
       },
 
-      // Resend invitation
+      // Resend invitation (copy token)
       resendInvite: (roommate: Roommate) => {
-        if (roommate.invite_link) {
-          navigator.clipboard.writeText(roommate.invite_link);
-          toast.success("Link copiado al portapapeles", {
+        if (roommate.token) {
+          navigator.clipboard.writeText(roommate.token);
+          toast.success("Token copiado al portapapeles", {
             description: "Compártelo con tu roomie",
           });
         }
@@ -300,6 +311,8 @@ export const useOnboardingStore = create<OnboardingState>()(
           // Get zones to map zone names to IDs
           const zones = await db.getZones(createdHomeId);
           const zoneMap = new Map(zones.map(z => [z.name, z.id]));
+          
+          console.log('Available zones:', zones.map(z => ({ id: z.id, name: z.name })));
 
           // Create tasks and assign to owner
           await Promise.all(
@@ -309,7 +322,25 @@ export const useOnboardingStore = create<OnboardingState>()(
 
               try {
                 // Find zone_id based on template zone name
-                const zoneId = template.zone ? zoneMap.get(template.zone) : undefined;
+                let zoneId = template.zone ? zoneMap.get(template.zone) : undefined;
+                
+                // If no zone found and template has a zone, log warning
+                if (template.zone && !zoneId) {
+                  console.warn(`Template "${template.title}" has zone "${template.zone}" but it wasn't found in zones. Available zones:`, Array.from(zoneMap.keys()));
+                  // Try to match case-insensitively or with partial match
+                  const zoneLower = template.zone.toLowerCase();
+                  for (const [name, id] of zoneMap.entries()) {
+                    if (name.toLowerCase() === zoneLower || name.toLowerCase().includes(zoneLower)) {
+                      console.log(`Found zone match: "${name}" for template zone "${template.zone}"`);
+                      zoneId = id;
+                      break;
+                    }
+                  }
+                }
+                
+                if (!zoneId) {
+                  console.warn(`No zone assigned for task "${template.title}" (template.zone: ${template.zone})`);
+                }
 
                 // Create task
                 const task = await db.createTask(createdHomeId, {

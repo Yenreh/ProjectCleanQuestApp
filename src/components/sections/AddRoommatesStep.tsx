@@ -3,7 +3,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Users, Mail, Link2, X } from "lucide-react";
+import { Users, Mail, Key, X } from "lucide-react";
 import { useOnboardingStore } from "../../stores";
 
 export function AddRoommatesStep() {
@@ -59,7 +59,7 @@ export function AddRoommatesStep() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            💡 Podrás copiar el link o token para compartirlo con tu roomie
+            💡 Podrás copiar el token para compartirlo con tu roomie
           </p>
         </div>
 
@@ -84,9 +84,9 @@ export function AddRoommatesStep() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleResendInvite(roommate)}
-                    title="Copiar link de invitación"
+                    title="Copiar token de invitación"
                   >
-                    <Link2 className="w-4 h-4 text-blue-500" />
+                    <Key className="w-4 h-4 text-blue-500" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -112,7 +112,8 @@ export function AddRoommatesStep() {
           </Button>
           <Button
             onClick={handleCompleteRoommates}
-            className="flex-1 bg-[#89a7c4] hover:bg-[#7996b3]"
+            disabled={roommates.length === 0}
+            className="flex-1 bg-[#89a7c4] hover:bg-[#7996b3] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continuar
           </Button>

@@ -333,12 +333,8 @@ export const db = {
       data = created
     }
     
-    // TODO: Send invitation email with token
-    // For now, return the invitation link that can be shared
-    const inviteLink = `${window.location.origin}?invite=${token}`;
-    console.log('Invitation link:', inviteLink);
-    
-    return { ...data, invite_link: inviteLink };
+    // Return the invitation data with token
+    return data;
   },
 
   async getInvitationByToken(token: string) {
@@ -446,11 +442,8 @@ export const db = {
     
     if (error) throw error;
     
-    // Add invite link to each invitation
-    return data.map(invitation => ({
-      ...invitation,
-      invite_link: `${window.location.origin}?invite=${invitation.invitation_token}`
-    }));
+    // Return invitations with their tokens
+    return data;
   },
 
   async cancelInvitation(invitationId: string) {
@@ -2272,6 +2265,124 @@ export const db = {
       };
     } catch (error) {
       console.error('Error closing cycle and reassigning:', error);
+      throw error;
+    }
+  },
+
+  // OPTIMIZED: Smart reassignment - only redistributes pending tasks without closing cycle
+  async reassignPendingTasks(homeId: number): Promise<{ reassigned: number }> {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    try {
+      // 1. Get home configuration
+      const { data: home } = await supabase
+        .from('homes')
+        .select('rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      if (!home) throw new Error('Home not found');
+      
+      const rotationPolicy = home.rotation_policy || 'weekly';
+      const today = new Date();
+      const currentCycleStart = this.getCycleStartDate(rotationPolicy, today);
+      const currentCycleStartStr = currentCycleStart.toISOString().split('T')[0];
+      
+      // 2. Get pending tasks for current cycle
+      const { data: pendingAssignments, error: fetchError } = await supabase
+        .from('task_assignments')
+        .select(`
+          id, 
+          task_id, 
+          member_id,
+          home_members!inner(home_id)
+        `)
+        .eq('home_members.home_id', homeId)
+        .eq('status', 'pending')
+        .gte('assigned_date', currentCycleStartStr);
+      
+      if (fetchError) throw fetchError;
+      
+      if (!pendingAssignments || pendingAssignments.length === 0) {
+        return { reassigned: 0 };
+      }
+      
+      // 3. Get active members with their current task counts
+      const { data: members } = await supabase
+        .from('home_members')
+        .select('id, user_id')
+        .eq('home_id', homeId)
+        .eq('status', 'active');
+      
+      if (!members || members.length === 0) {
+        throw new Error('No active members found');
+      }
+      
+      // 4. Count current pending tasks per member
+      const memberTaskCounts: { [key: number]: number } = {};
+      members.forEach(m => { memberTaskCounts[m.id] = 0; });
+      
+      const { data: allPendingInCycle } = await supabase
+        .from('task_assignments')
+        .select('member_id, home_members!inner(home_id)')
+        .eq('home_members.home_id', homeId)
+        .eq('status', 'pending')
+        .gte('assigned_date', currentCycleStartStr);
+      
+      if (allPendingInCycle) {
+        allPendingInCycle.forEach(a => {
+          memberTaskCounts[a.member_id] = (memberTaskCounts[a.member_id] || 0) + 1;
+        });
+      }
+      
+      // 5. Reassign tasks equitably
+      let reassignedCount = 0;
+      
+      for (const assignment of pendingAssignments) {
+        // Find member with least pending tasks (excluding current assignee)
+        let minTasks = Infinity;
+        let bestMemberId = assignment.member_id;
+        
+        for (const member of members) {
+          if (member.id !== assignment.member_id) {
+            const taskCount = memberTaskCounts[member.id] || 0;
+            if (taskCount < minTasks) {
+              minTasks = taskCount;
+              bestMemberId = member.id;
+            }
+          }
+        }
+        
+        // Only reassign if we found a member with fewer tasks
+        if (bestMemberId !== assignment.member_id && minTasks < (memberTaskCounts[assignment.member_id] || 0)) {
+          const { error: updateError } = await supabase
+            .from('task_assignments')
+            .update({ member_id: bestMemberId })
+            .eq('id', assignment.id);
+          
+          if (!updateError) {
+            // Update counts for next iteration
+            memberTaskCounts[assignment.member_id]--;
+            memberTaskCounts[bestMemberId]++;
+            reassignedCount++;
+          }
+        }
+      }
+      
+      // 6. Log the change
+      if (reassignedCount > 0) {
+        await supabase.from('change_log').insert({
+          home_id: homeId,
+          change_type: 'task_reassignment',
+          change_description: `${reassignedCount} tareas pendientes redistribuidas equitativamente entre miembros`,
+          old_value: pendingAssignments.length.toString(),
+          new_value: reassignedCount.toString()
+        });
+      }
+      
+      return { reassigned: reassignedCount };
+    } catch (error) {
+      console.error('Error reassigning pending tasks:', error);
       throw error;
     }
   },

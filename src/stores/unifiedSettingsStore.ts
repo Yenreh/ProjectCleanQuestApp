@@ -59,6 +59,7 @@ interface UnifiedSettingsState {
   updateRotationPolicy: (homeId: number, newPolicy: RotationPolicy) => Promise<void>;
   updateAutoRotation: (homeId: number, enabled: boolean) => Promise<void>;
   closeCycleAndReassign: (homeId: number) => Promise<void>;
+  reassignPendingTasks: (homeId: number) => Promise<void>;
   
   // ═══════════════════════════════════════
   // USER PREFERENCES ACTIONS
@@ -83,7 +84,6 @@ interface UnifiedSettingsState {
   // ═══════════════════════════════════════
   // setStatisticsOpen, setNextCycleOpen → use useUIStore
   resetUserPreferences: () => void;
-  clearCache: () => void;
   exportData: () => void;
 }
 
@@ -209,6 +209,25 @@ export const useUnifiedSettingsStore = create<UnifiedSettingsState>()(
         }
       },
       
+      reassignPendingTasks: async (homeId: number) => {
+        set({ isRotatingCycle: true });
+        
+        try {
+          const result = await db.reassignPendingTasks(homeId);
+          if (result.reassigned === 0) {
+            toast.info('No hay tareas pendientes para redistribuir');
+          } else {
+            toast.success(`${result.reassigned} tareas pendientes redistribuidas equitativamente`);
+          }
+        } catch (error: any) {
+          console.error('Error reassigning tasks:', error);
+          toast.error('Error al redistribuir las tareas');
+          throw error;
+        } finally {
+          set({ isRotatingCycle: false });
+        }
+      },
+      
       // ═══════════════════════════════════════
       // USER PREFERENCES ACTIONS
       // ═══════════════════════════════════════
@@ -296,14 +315,6 @@ export const useUnifiedSettingsStore = create<UnifiedSettingsState>()(
             weeklyReport: true,
           });
           toast.success("Configuración de usuario restablecida");
-        }
-      },
-      
-      clearCache: () => {
-        if (confirm('¿Limpiar la caché local?')) {
-          localStorage.clear();
-          sessionStorage.clear();
-          toast.success("Caché limpiada");
         }
       },
       

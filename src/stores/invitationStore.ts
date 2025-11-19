@@ -43,6 +43,7 @@ interface InvitationState {
   acceptHomeChange: (userId: string) => Promise<void>;
   declineHomeChange: (currentHomeName: string | null) => Promise<void>;
   checkUrlForInvitation: () => void;
+  checkPendingInvitationByEmail: (email: string) => Promise<void>;
   clearInvitationData: () => void;
   
   // ═══════════════════════════════════════
@@ -55,7 +56,6 @@ interface InvitationState {
   resetInviteForm: () => void;
   sendInvite: (homeId: number, onSuccess: () => void) => Promise<void>;
   revokeInvitation: (token: string, homeId: number) => Promise<void>;
-  copyInvitationLink: (token: string) => Promise<void>;
   copyInvitationToken: (token: string) => Promise<void>;
 }
 
@@ -142,27 +142,39 @@ export const useInvitationStore = create<InvitationState>()(
       },
       
       checkUrlForInvitation: () => {
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get('invite');
-        
-        if (token) {
-          // Save token to localStorage for persistence through login
-          localStorage.setItem('pending_invitation', token);
-          set({ invitationToken: token });
-          
-          // Clean URL
-          window.history.replaceState({}, '', window.location.pathname);
-        } else {
-          // Check if there's a pending invitation in localStorage
-          const pendingToken = localStorage.getItem('pending_invitation');
-          if (pendingToken) {
-            set({ invitationToken: pendingToken });
+        // La comprobación de invitaciones pendientes se hace desde la base de datos
+        // cuando el usuario no tiene casa
+      },
+      
+      checkPendingInvitationByEmail: async (email: string) => {
+        try {
+          const emailInvitation = await db.getPendingInvitationByEmail(email);
+          if (emailInvitation && emailInvitation.invitation_token) {
+            console.log('Store: Found pending invitation for email:', email);
+            
+            // Get owner name from the home profile data
+            const ownerName = emailInvitation.homes?.profiles?.full_name || 
+                            emailInvitation.homes?.profiles?.email || 
+                            'Desconocido';
+            
+            set({
+              changeHomeData: {
+                invitationId: emailInvitation.id,
+                token: emailInvitation.invitation_token,
+                currentHomeName: null,
+                currentHomeOwner: undefined,
+                newHomeName: emailInvitation.homes?.name || 'Desconocido',
+                newHomeOwner: ownerName
+              },
+              showChangeHomeDialog: true
+            });
           }
+        } catch (error) {
+          console.error('Error checking pending invitations:', error);
         }
       },
       
       clearInvitationData: () => {
-        localStorage.removeItem('pending_invitation');
         set({
           invitationToken: null,
           changeHomeData: null,
@@ -247,21 +259,6 @@ export const useInvitationStore = create<InvitationState>()(
           toast.error("Error al revocar invitación");
         } finally {
           set({ loadingInvitations: false });
-        }
-      },
-      
-      copyInvitationLink: async (token: string) => {
-        try {
-          if (!token) {
-            toast.error("Token no disponible");
-            return;
-          }
-          const link = `${window.location.origin}/?invitation=${token}`;
-          await navigator.clipboard.writeText(link);
-          toast.success("Enlace copiado al portapapeles");
-        } catch (error: any) {
-          console.error('Error copying link:', error);
-          toast.error("Error al copiar el enlace");
         }
       },
       

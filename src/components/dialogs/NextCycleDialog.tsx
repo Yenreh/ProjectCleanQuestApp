@@ -13,13 +13,13 @@ interface NextCycleDialogProps {
 }
 
 export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycleDialogProps) {
-  const { isRotatingCycle, closeCycleAndReassign } = useUnifiedSettingsStore();
+  const { isRotatingCycle, reassignPendingTasks } = useUnifiedSettingsStore();
 
-  const handleRotate = async () => {
+  const handleReassign = async () => {
     if (!home) return;
     
     try {
-      await closeCycleAndReassign(home.id);
+      await reassignPendingTasks(home.id);
       
       if (onRotate) {
         onRotate();
@@ -71,18 +71,22 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
                 <div>
                   <h4 className="mb-1">Rotación Automática Activada</h4>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Las tareas se redistribuirán automáticamente según la política configurada
+                    Las tareas se redistribuirán automáticamente según la política configurada. 
+                    También puedes redistribuir manualmente las tareas pendientes del ciclo actual.
                   </p>
                   <Button 
                     size="sm" 
                     variant="outline"
                     className="w-full"
-                    onClick={handleRotate}
+                    onClick={handleReassign}
                     disabled={isRotatingCycle}
                   >
                     <RefreshCw className={`w-4 h-4 mr-2 ${isRotatingCycle ? 'animate-spin' : ''}`} />
-                    {isRotatingCycle ? 'Rotando...' : 'Forzar Rotación Ahora'}
+                    {isRotatingCycle ? 'Redistribuyendo...' : 'Redistribuir Tareas Pendientes'}
                   </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Solo reasigna tareas pendientes sin cerrar el ciclo actual
+                  </p>
                 </div>
               </div>
             </Card>
@@ -93,17 +97,20 @@ export function NextCycleDialog({ open, onOpenChange, home, onRotate }: NextCycl
                 <div>
                   <h4 className="mb-1">Rotación Manual</h4>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Deberás rotar las tareas manualmente al iniciar el próximo ciclo. Esto cerrará las tareas pendientes y reasignará todas las tareas.
+                    Puedes redistribuir manualmente las tareas pendientes del ciclo actual entre los miembros.
                   </p>
                   <Button 
                     size="sm" 
                     className="w-full bg-[#d4a574] hover:bg-[#c49565]"
-                    onClick={handleRotate}
+                    onClick={handleReassign}
                     disabled={isRotatingCycle}
                   >
                     <RefreshCw className={`w-4 h-4 mr-2 ${isRotatingCycle ? 'animate-spin' : ''}`} />
-                    {isRotatingCycle ? 'Rotando...' : 'Cerrar Ciclo y Reasignar'}
+                    {isRotatingCycle ? 'Redistribuyendo...' : 'Redistribuir Tareas Pendientes'}
                   </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Solo reasigna tareas pendientes sin afectar el progreso del ciclo actual
+                  </p>
                 </div>
               </div>
             </Card>

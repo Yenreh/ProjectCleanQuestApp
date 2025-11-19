@@ -66,7 +66,6 @@ export function GeneralSettingsDialog({
     saveNotifications,
     toggleReminderDay,
     resetUserPreferences,
-    clearCache,
     exportData,
   } = useUnifiedSettingsStore();
 
@@ -105,8 +104,8 @@ export function GeneralSettingsDialog({
     exportData();
   };
 
-  const handleClearCache = () => {
-    clearCache();
+  const handleResetPreferences = () => {
+    resetUserPreferences();
   };
 
   const handleResetSettings = () => {
@@ -373,15 +372,6 @@ export function GeneralSettingsDialog({
                 className="w-full justify-start"
               >
                 Exportar mis datos
-              </Button>
-
-              <Button 
-                onClick={handleClearCache}
-                variant="outline" 
-                size="sm"
-                className="w-full justify-start"
-              >
-                Limpiar caché local
               </Button>
 
               <Button 
