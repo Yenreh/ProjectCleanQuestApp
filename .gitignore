@@ -112,6 +112,3 @@ temp/
 dist-ssr/
 *.tsbuildinfo
 .vite/
-
-# Ignore docs
-docs/*

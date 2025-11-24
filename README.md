@@ -1,89 +1,76 @@
-# CleanQuest App
+# CleanQuest
 
-Aplicación de gamificación para gestión colaborativa de tareas del hogar. Stack: React + TypeScript + Vite + Supabase.
+Aplicación web de gamificación para gestión colaborativa de tareas del hogar.
 
-## Setup del Proyecto
+## Descripción
 
-### 1. Configurar Supabase
+Sistema multiusuario completo con autenticación, gestión de tareas, sistema de puntos y progresión, desafíos colaborativos y notificaciones en tiempo real. Diseñado para hacer más eficiente y motivador el mantenimiento del hogar compartido.
 
-1. Crea un proyecto en [Supabase](https://app.supabase.com/)
-2. En `Settings` → `API`, copia:
-   - Project URL
-   - anon/public key
+## Características Principales
 
-### 2. Ejecutar Scripts SQL
+- **Gestión de Hogares**: Crea y administra hogares compartidos con múltiples miembros
+- **Sistema de Tareas**: Asignación, programación y seguimiento de tareas domésticas
+- **Gamificación**: Puntos de experiencia, niveles, maestría y desafíos
+- **Notificaciones**: Sistema de alertas en tiempo real para eventos importantes
+- **Estadísticas**: Visualización del progreso individual y del hogar
+- **Multiplataforma**: Responsive design para escritorio y móvil
 
-En el SQL Editor de Supabase, ejecuta en orden:
+## Stack Tecnológico
 
-1. `scripts/01-create-tables.sql`
-2. `scripts/02-seed-data.sql`
-3. `scripts/03-functions.sql`
+- **Frontend**: React 18, TypeScript, Vite
+- **UI**: Tailwind CSS, shadcn/ui, Lucide Icons
+- **Backend**: Supabase (PostgreSQL, Auth, Realtime)
+- **Estado**: Zustand
+- **Deploy**: Vercel
 
-### 3. Variables de Entorno
-
-Crea `.env.local`:
-
-```env
-VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
-VITE_SUPABASE_ANON_KEY=tu-anon-key
-```
-
-### 4. Instalación
+## Inicio Rápido
 
 ```bash
+# Clonar repositorio
+git clone https://github.com/Yenreh/ProjectCleanQuestApp.git
+cd CleanQuestApp
+
+# Instalar dependencias
 npm install
+
+# Configurar variables de entorno
+cp .env.example .env
+
+# Iniciar servidor de desarrollo
 npm run dev
 ```
 
-## Comandos
+Visita `http://localhost:5173`
+
+## Documentación
+
+- [Instalación y Configuración](docs/SETUP.md)
+- [Estructura del Proyecto](docs/STRUCTURE.md)
+- [Despliegue en Vercel](docs/DEPLOYMENT.md)
+- [Sistema de Versionado](VERSIONING.md)
+- [Historial de Cambios](docs/CHANGELOG.md)
+
+## Scripts Disponibles
 
 ```bash
-npm run dev          # Desarrollo (localhost:5173)
-npm run build        # Build producción
+npm run dev          # Servidor de desarrollo
+npm run build        # Build para producción
 npm run preview      # Preview del build
 ```
 
-## Despliegue (Vercel)
+## Licencia
 
-1. Importa el repositorio en [vercel.com](https://vercel.com)
-2. Configura variables de entorno:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-3. Deploy
+[MIT License](LICENSE) - Código abierto para uso libre
 
-## Estructura del Proyecto
+## Soporte
 
-```
-CleanQuestApp/
-├── scripts/              # Scripts SQL para Supabase
-├── src/
-│   ├── components/
-│   │   ├── dialogs/              # Modales y diálogos
-│   │   │   └── home-management/  # Tabs de gestión del hogar
-│   │   ├── panels/               # Vistas principales
-│   │   ├── sections/             # Pasos del onboarding
-│   │   └── ui/                   # Componentes base (shadcn/ui)
-│   ├── hooks/                    # Custom hooks
-│   ├── lib/                      # Utilidades y servicios
-│   │   ├── db.ts                 # Cliente Supabase
-│   │   ├── types.ts              # Tipos TypeScript
-│   │   ├── notifications.ts      # Sistema de notificaciones
-│   │   └── masteryService.ts     # Lógica de maestría
-│   ├── stores/                   # Estado global (Zustand)
-│   ├── styles/                   # Estilos globales
-│   ├── App.tsx
-│   └── main.tsx
-├── .env.local
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── vercel.json
-```
+Para reportar bugs o solicitar características, abre un [issue](https://github.com/Yenreh/ProjectCleanQuestApp/issues).
 
-## Stack Técnico
+## Versión
 
-- **Frontend**: React 18 + TypeScript
-- **Build**: Vite
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **UI**: Tailwind CSS + shadcn/ui
-- **Deploy**: Vercel
+v0.8.0 - Ver [CHANGELOG](docs/CHANGELOG.md) para historial de cambios
+
+---
+
+Desarrollado como proyecto académico para la Universidad
+
