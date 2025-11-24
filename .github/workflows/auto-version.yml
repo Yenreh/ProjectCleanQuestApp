@@ -104,7 +104,9 @@ jobs:
         env:
           NEW_VERSION: ${{ steps.bump_version.outputs.new_version }}
         run: |
-          git add version.json package.json package-lock.json
+          git add version.json package.json
+          # Agregar package-lock.json solo si tiene cambios
+          git add package-lock.json 2>/dev/null || true
           git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
           git push origin main
 
