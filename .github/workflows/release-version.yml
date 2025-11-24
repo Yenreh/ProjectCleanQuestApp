@@ -78,7 +78,7 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: v${{ steps.get_version.outputs.version }}
           body: |
-            ## 🎉 Release v${{ steps.get_version.outputs.version }}
+            ## Release v${{ steps.get_version.outputs.version }}
             
             ### What's Changed
             Check the commit history for detailed changes.
