@@ -10,7 +10,7 @@ export type MemberRole = "owner" | "admin" | "member"
 
 export type MemberStatus = "pending" | "active" | "inactive"
 
-export type AssignmentStatus = "pending" | "in_progress" | "completed" | "skipped"
+export type AssignmentStatus = "pending" | "in_progress" | "completed" | "skipped_expired" | "skipped_cancelled" | "skipped_reassigned"
 
 export type ChallengeType = "group" | "personal" | "strategic"
 

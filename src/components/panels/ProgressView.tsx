@@ -138,13 +138,13 @@ export function ProgressView({ masteryLevel, currentMember, homeId }: ProgressPa
         weekStart.setDate(weekStart.getDate() - 6);
         
         weekPromises.push(
-          db.calculateRotationPercentage(
+          db.getWeeklyCompletionPercentage(
             homeId,
             weekStart.toISOString().split('T')[0],
             weekEnd.toISOString().split('T')[0]
           ).then(percentage => ({
             week: i === 0 ? 'Semana actual' : `Hace ${i} semana${i > 1 ? 's' : ''}`,
-            percentage: 100 - percentage // Invertir para mostrar completitud
+            percentage
           }))
         );
       }

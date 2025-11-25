@@ -136,6 +136,16 @@ export default function App() {
       if (updatedHome && updatedMember) {
         console.log('App: User has home and member, marking onboarding complete');
         setHasCompletedOnboarding(true);
+        
+        // Auto-check and start new cycle if needed
+        console.log('App: Checking if new cycle needs to be started...');
+        const cycleResult = await db.checkAndStartNewCycleIfNeeded(updatedHome.id);
+        if (cycleResult.newCycleStarted) {
+          console.log(`App: ✅ New cycle started with ${cycleResult.assignments} assignments`);
+          toast.success(`Nuevo ciclo iniciado con ${cycleResult.assignments} tareas asignadas`);
+          // Reload home data to refresh the view
+          await loadHomeData(userId);
+        }
       } else {
         console.log('App: No home or member found, checking invitations...');
         // Check if there's a pending invitation from store
@@ -399,7 +409,7 @@ export default function App() {
                       {userInitials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium">{userName}</span>
+                  {/* <span className="text-sm font-medium">{userName}</span> */}
                   <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
@@ -469,7 +479,7 @@ export default function App() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-auto pb-20">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20 main-content-area">
           {renderScreen()}
         </div>
 

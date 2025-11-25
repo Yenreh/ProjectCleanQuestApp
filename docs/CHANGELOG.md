@@ -4,6 +4,32 @@ Historial de cambios del proyecto basado en commits.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [0.8.2] - 2025-11-25
+
+### Added
+- Sistema de auto-gestión de ciclos de rotación
+- Función `checkAndStartNewCycleIfNeeded()` para iniciar ciclos automáticamente
+- Función `getWeeklyCompletionPercentage()` para estadísticas precisas de completitud semanal
+- Nuevos estados de asignación: `skipped_expired`, `skipped_cancelled`, `skipped_reassigned`
+
+### Changed
+- Rediseñado sistema de salto/cancelación de tareas usando solo campo `status`
+- Mejorado cálculo de métricas para excluir tareas canceladas/reasignadas pero incluir expiradas
+- Actualizado filtrado de tareas en `getHomeMetrics()` y `getZoneStatus()`
+- Reemplazado uso incorrecto de `calculateRotationPercentage()` por nueva función de completitud
+- Vista de Progreso ahora muestra porcentajes correctos de completitud semanal histórica
+
+### Fixed
+- Corregido problema de zonas mostrando "sin datos" cuando tenían tareas asignadas
+- Solucionado cálculo de ciclos usando solo `cycleStart` (ahora usa también `cycleEnd`)
+- Eliminado problema de tareas expiradas apareciendo en lista de tareas disponibles
+- Corregido trending semanal mostrando 0% para semanas con tareas completadas
+
+### Removed
+- Eliminado campo `skip_reason` (consolidado en `status`)
+- Eliminado script de migración `06-add-skip-reason.sql`
+- Removidos console.log de debug en producción
+
 ## [0.8.1] - 2025-11-24
 
 ### Changed

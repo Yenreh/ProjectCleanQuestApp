@@ -27,17 +27,13 @@ export function FirstTaskStep({ onComplete }: FirstTaskStepProps) {
   // Auto-complete when progress reaches 100%
   useEffect(() => {
     if (firstTaskProgress === 100 && !isCompleting) {
-      console.log('FirstTaskStep: Starting completion process...');
       setIsCompleting(true);
       
       const completeOnboarding = async () => {
         try {
-          console.log('FirstTaskStep: Getting current user...');
           const user = await db.getCurrentUser();
           if (user) {
-            console.log('FirstTaskStep: Marking onboarding complete for user:', user.id);
             await db.markOnboardingComplete(user.id);
-            console.log('FirstTaskStep: Onboarding marked as complete');
             
             // Check for achievements (onboarding badge)
             try {
@@ -46,11 +42,7 @@ export function FirstTaskStep({ onComplete }: FirstTaskStepProps) {
                 const members = await db.getHomeMembers(homes[0].id);
                 const currentMember = members.find(m => m.user_id === user.id);
                 if (currentMember) {
-                  console.log('FirstTaskStep: Checking achievements for member:', currentMember.id);
-                  const newAchievements = await db.checkAndUnlockAchievements(currentMember.id);
-                  if (newAchievements && newAchievements.length > 0) {
-                    console.log('FirstTaskStep: Unlocked achievements:', newAchievements);
-                  }
+                  await db.checkAndUnlockAchievements(currentMember.id);
                 }
               }
             } catch (achievementError) {

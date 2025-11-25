@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS task_assignments (
   member_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
   assigned_date DATE NOT NULL,
   due_date DATE NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped_expired', 'skipped_cancelled', 'skipped_reassigned')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(task_id, member_id, assigned_date)
 );
