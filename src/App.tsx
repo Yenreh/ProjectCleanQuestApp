@@ -74,6 +74,7 @@ export default function App() {
   
   // Local state for onboarding
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   
   // Información del usuario
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
@@ -196,6 +197,8 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
+    } finally {
+      setIsCheckingOnboarding(false);
     }
   }
 
@@ -300,12 +303,14 @@ export default function App() {
 
   // If authenticated but we don't have user data yet, keep loading
   // This prevents the flash of onboarding screen while data loads
-  if (!currentUser) {
+  if (!currentUser || isCheckingOnboarding) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fafaf9]">
         <div className="text-center">
           <Sparkles className="w-12 h-12 text-[#6fbd9d] animate-pulse mx-auto mb-4" />
-          <p className="text-muted-foreground">Cargando perfil...</p>
+          <p className="text-muted-foreground">
+            {isCheckingOnboarding ? "Verificando hogar..." : "Cargando perfil..."}
+          </p>
         </div>
       </div>
     );
