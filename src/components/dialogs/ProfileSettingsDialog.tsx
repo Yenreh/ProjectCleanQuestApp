@@ -203,7 +203,7 @@ export function ProfileSettingsDialog({
           <TabsContent value="personal">
             <div className="space-y-4">
               <div className="flex flex-col items-center mb-4">
-                <Avatar className="w-20 h-20 mb-2">
+                <Avatar className="w-10 h-10 mb-2">
                   <AvatarFallback className="bg-[#6fbd9d] text-white text-xl">
                     {initials}
                   </AvatarFallback>

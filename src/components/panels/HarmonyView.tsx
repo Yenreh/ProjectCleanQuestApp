@@ -165,7 +165,7 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
   }
 
   return (
-    <div className="px-6 py-8 max-w-3xl mx-auto">
+    <div className="px-6 py-8 max-w-2xl mx-auto">
       {/* Celebration Header */}
       <div className="text-center mb-8">
         <div className="inline-block p-4 rounded-full bg-gradient-to-br from-[#fef3e0] to-[#f0ebf5] mb-4">
@@ -194,12 +194,12 @@ export function HarmonyView({ masteryLevel, currentMember, homeId }: HarmonyRoom
 
       {/* Consecutive Weeks Badge */}
       <Card className="p-6 mb-6 bg-gradient-to-br from-[#e9f5f0] via-[#f5f3ed] to-[#fef3e0] border-2 border-[#d4a574]/20">
-        <div className="flex items-center justify-center gap-3">
-          <Calendar className="w-6 h-6 text-[#6fbd9d]" />
-          <div className="text-center">
+        <div className="flex flex-col items-center justify-center gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-[#6fbd9d]" />
             <p className="text-3xl" style={{ fontWeight: 600 }}>{consecutiveWeeks}</p>
-            <p className="text-sm text-muted-foreground">semanas consecutivas con {completionRate}% de cumplimiento</p>
           </div>
+          <p className="text-sm text-muted-foreground text-center">semanas consecutivas con {completionRate}% de cumplimiento</p>
         </div>
       </Card>
 

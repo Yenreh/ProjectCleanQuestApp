@@ -4,6 +4,16 @@ Historial de cambios del proyecto basado en commits.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [0.8.5] - 2025-11-27
+
+### Changed
+- App Icon in onboarding view
+
+## [0.8.5] - 2025-11-27
+
+### Changed
+- App Icon, added custom icon to app and loading screens
+
 ## [0.8.4] - 2025-11-25
 
 ### Fixed

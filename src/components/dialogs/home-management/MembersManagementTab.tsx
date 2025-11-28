@@ -196,6 +196,19 @@ export function MembersManagementTab({ homeId, currentMember, onUpdate }: Member
                               {inv.role === 'owner' ? 'Dueño' : inv.role === 'admin' ? 'Admin' : 'Miembro'}
                             </Badge>
                           </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => copyInvitationToken(inv.invitation_token)}
+                            disabled={loadingInvitations}
+                          >
+                            <Key className="w-3 h-3 mr-1" />
+                            Copiar token
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -205,19 +218,6 @@ export function MembersManagementTab({ homeId, currentMember, onUpdate }: Member
                           >
                             <Trash2 className="w-3 h-3 mr-1" />
                             Revocar
-                          </Button>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full h-7 text-xs"
-                            onClick={() => copyInvitationToken(inv.invitation_token)}
-                            disabled={loadingInvitations}
-                          >
-                            <Key className="w-3 h-3 mr-1" />
-                            Copiar token
                           </Button>
                         </div>
                       </div>

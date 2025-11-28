@@ -32,11 +32,11 @@ export function OnboardingView({ onComplete }: OnboardingWizardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] px-6 py-8 max-w-md mx-auto">
+    <div className="min-h-screen bg-[#fafaf9] px-6 py-8 max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <Sparkles className="w-8 h-8 text-[#6fbd9d]" />
+          <img src="/logo.svg" alt="CleanQuest" className="w-10 h-9" />
           <h1 className="text-2xl font-bold">CleanQuest</h1>
         </div>
         <p className="text-muted-foreground text-base mb-6">Configura tu hogar colaborativo</p>

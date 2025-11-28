@@ -196,7 +196,7 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
   }
 
   return (
-    <div className="flex flex-col items-center px-6 py-8 max-w-md mx-auto min-h-screen">
+    <div className="flex flex-col items-center px-6 py-8 max-w-2xl mx-auto min-h-screen">
       {/* Header */}
       <div className="w-full mb-6">
         <div className="flex items-center justify-between mb-2">
