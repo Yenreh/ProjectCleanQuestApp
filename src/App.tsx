@@ -284,7 +284,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fafaf9]">
         <div className="text-center">
-          <Sparkles className="w-12 h-12 text-[#6fbd9d] animate-pulse mx-auto mb-4" />
+          <img src="/favicon.svg" alt="Logo" className="w-20 h-20 animate-pulse mx-auto mb-4" />
           <p className="text-muted-foreground">Cargando...</p>
         </div>
       </div>
@@ -307,7 +307,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fafaf9]">
         <div className="text-center">
-          <Sparkles className="w-12 h-12 text-[#6fbd9d] animate-pulse mx-auto mb-4" />
+          <img src="/favicon.svg" alt="Logo" className="w-20 h-20 animate-pulse mx-auto mb-4" />
           <p className="text-muted-foreground">
             {isCheckingOnboarding ? "Verificando hogar..." : "Cargando perfil..."}
           </p>
@@ -379,7 +379,7 @@ export default function App() {
         <div className="bg-white border-b border-border px-6 py-3">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#6fbd9d]" />
+              <img src="/favicon.svg" alt="Logo" className="w-10 h-9" />
               <span className="text-sm">CleanQuest</span>
               {currentHome && (
                 <>

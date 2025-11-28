@@ -73,7 +73,7 @@ export function AuthView({ onSuccess, invitationToken }: AuthScreenProps) {
         <Card className="p-6 sm:p-8">
           <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 rounded-full from-[#e9f5f0] to-[#d0ebe0] mb-4">
-              <Sparkles className="w-12 h-12 sm:w-14 sm:h-14 text-[#6fbd9d]" strokeWidth={2.5} />
+              <img src="/favicon.svg" alt="Logo" className="w-20 h-20 sm:w-20 sm:h-20" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold mb-2">CleanQuest</h1>
             
