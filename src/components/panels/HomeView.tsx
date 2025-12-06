@@ -405,7 +405,7 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
                           </Button>
                         </>
                       )}
-                      {(masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
+                      {(masteryLevel === "novice" || masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
                         <Button 
                           variant="ghost" 
                           size="sm" 
