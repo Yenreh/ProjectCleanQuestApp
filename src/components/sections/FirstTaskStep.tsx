@@ -1,7 +1,7 @@
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
-import { Sparkles, Trash2, CheckCircle2 } from "lucide-react";
+import { Sparkles, Trash2, CheckCircle2, Loader2 } from "lucide-react";
 import { useOnboardingStore } from "../../stores";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
@@ -143,7 +143,10 @@ export function FirstTaskStep({ onComplete }: FirstTaskStepProps) {
           <div className="text-center py-4">
             <div className="text-4xl mb-2">🎉</div>
             <p>¡Excelente trabajo!</p>
-            <p className="text-sm text-muted-foreground">Redirigiendo a tu panel...</p>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Redirigiendo a tu panel...</span>
+            </div>
           </div>
         )}
       </div>

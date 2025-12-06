@@ -4,7 +4,7 @@ import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Home, Clock } from "lucide-react";
+import { Home, Clock, Loader2 } from "lucide-react";
 import { useOnboardingStore } from "../../stores";
 
 export function CreateHomeStep() {
@@ -14,6 +14,7 @@ export function CreateHomeStep() {
     selectedZones,
     reminderTime,
     zones,
+    isCreatingHome,
     setHomeName,
     setMemberCount,
     setReminderTime,
@@ -27,6 +28,10 @@ export function CreateHomeStep() {
 
   const handleToggleZone = (zone: string) => {
     toggleZone(zone);
+  };
+
+  const getZoneName = (zone: string | { name: string; icon: string }) => {
+    return typeof zone === 'string' ? zone : zone.name;
   };
 
   return (
@@ -64,18 +69,21 @@ export function CreateHomeStep() {
         <div>
           <Label className="mb-2 block">Zonas del hogar</Label>
           <div className="flex flex-wrap gap-2">
-            {zones.map(zone => (
-              <Badge
-                key={zone}
-                variant={selectedZones.includes(zone) ? "default" : "outline"}
-                className={`cursor-pointer ${
-                  selectedZones.includes(zone) ? "bg-[#6fbd9d] hover:bg-[#5fa989]" : ""
-                }`}
-                onClick={() => handleToggleZone(zone)}
-              >
-                {zone}
-              </Badge>
-            ))}
+            {zones.map(zone => {
+              const zoneName = getZoneName(zone);
+              return (
+                <Badge
+                  key={zoneName}
+                  variant={selectedZones.some(z => getZoneName(z) === zoneName) ? "default" : "outline"}
+                  className={`cursor-pointer ${
+                    selectedZones.some(z => getZoneName(z) === zoneName) ? "bg-[#6fbd9d] hover:bg-[#5fa989]" : ""
+                  }`}
+                  onClick={() => handleToggleZone(zoneName)}
+                >
+                  {zoneName}
+                </Badge>
+              );
+            })}
           </div>
         </div>
 
@@ -94,8 +102,16 @@ export function CreateHomeStep() {
         <Button
           onClick={handleCreateHome}
           className="w-full bg-[#6fbd9d] hover:bg-[#5fa989]"
+          disabled={isCreatingHome}
         >
-          Crear casa
+          {isCreatingHome ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Creando casa...
+            </>
+          ) : (
+            'Crear casa'
+          )}
         </Button>
       </div>
     </Card>

@@ -3,13 +3,14 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Users, Mail, Key, X } from "lucide-react";
+import { Users, Mail, Key, X, Loader2 } from "lucide-react";
 import { useOnboardingStore } from "../../stores";
 
 export function AddRoommatesStep() {
   const {
     roommates,
     newEmail,
+    isContinuingRoommates,
     setNewEmail,
     addRoommate,
     resendInvite,
@@ -106,8 +107,16 @@ export function AddRoommatesStep() {
           <Button
             onClick={handleCompleteRoommates}
             className="w-full bg-[#3c88cf] hover:bg-[#7996b3]"
+            disabled={isContinuingRoommates}
           >
-            {roommates.length === 0 ? 'Continuar sin invitar' : 'Continuar'}
+            {isContinuingRoommates ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Continuando...
+              </>
+            ) : (
+              roommates.length === 0 ? 'Continuar sin invitar' : 'Continuar'
+            )}
           </Button>
         </div>
       </div>

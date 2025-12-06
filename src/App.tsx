@@ -45,7 +45,7 @@ export default function App() {
   const { currentHome, loadHomeData } = useHomeStore();
   const { currentMember, members } = useMembersStore();
   const { masteryLevel } = useMasteryStore();
-  const { notifications, unreadCount, loadNotifications, setUserEmail } = useNotificationStore();
+  const { notifications, unreadCount, loadNotifications } = useNotificationStore();
   const { 
     invitationToken, 
     changeHomeData, 
@@ -80,14 +80,21 @@ export default function App() {
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
   const userInitials = userName.substring(0, 2).toUpperCase();
 
-  // Setup notifications when user email changes
+  // Setup notifications when user email or member changes
   useEffect(() => {
+    const { setUserEmail, setCurrentMemberId } = useNotificationStore.getState();
     if (currentUser?.email) {
       setUserEmail(currentUser.email);
     } else {
       setUserEmail(null);
     }
-  }, [currentUser?.email]);
+    // Also set member ID for swap request notifications
+    if (currentMember?.id) {
+      setCurrentMemberId(currentMember.id);
+    } else {
+      setCurrentMemberId(null);
+    }
+  }, [currentUser?.email, currentMember?.id]);
 
   // Check for pending invitations when currentUser is loaded
   useEffect(() => {
@@ -604,6 +611,17 @@ export default function App() {
         open={notificationsDialogOpen}
         onOpenChange={setNotificationsDialogOpen}
         notifications={notifications}
+        currentMemberId={currentMember?.id}
+        onSwapResponse={async () => {
+          // Reload notifications and assignments after swap response
+          if (currentMember?.id) {
+            loadNotifications(currentUser?.email, currentMember.id);
+          }
+          // Trigger assignment reload in HomeView by changing the home state
+          if (currentHome?.id) {
+            loadHomeData(currentUser!.id);
+          }
+        }}
         onActionClick={(notification) => {
           if (notification.type === 'invitation') {
             const invNotification = notification as InvitationNotification;
