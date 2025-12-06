@@ -349,6 +349,7 @@ CREATE TABLE IF NOT EXISTS task_exchange_requests (
   task_assignment_id INTEGER NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
   requester_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
   target_member_id INTEGER REFERENCES home_members(id) ON DELETE SET NULL,
+  target_assignment_id INTEGER REFERENCES task_assignments(id) ON DELETE SET NULL,
   responder_id INTEGER REFERENCES home_members(id) ON DELETE SET NULL,
   request_type TEXT NOT NULL CHECK (request_type IN ('help', 'swap')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'completed')),
@@ -478,37 +479,37 @@ DROP TRIGGER IF EXISTS update_proposals_updated_at ON improvement_proposals;
 CREATE TRIGGER update_proposals_updated_at BEFORE UPDATE ON improvement_proposals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Habilitar Row Level Security (RLS) solo en tablas críticas
+-- ========== HABILITAR ROW LEVEL SECURITY EN TODAS LAS TABLAS ==========
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE homes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE home_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE zones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE zone_presets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_template_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_completions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_step_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_exchange_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_cancellations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE challenge_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenge_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE active_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenge_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xp_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE member_achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE improvement_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proposal_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE special_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE change_log ENABLE ROW LEVEL SECURITY;
 
--- Deshabilitar RLS en tablas de datos operacionales (el control se hace desde la app)
-ALTER TABLE zones DISABLE ROW LEVEL SECURITY;
-ALTER TABLE home_members DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_assignments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_completions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_steps DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_step_completions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE challenges DISABLE ROW LEVEL SECURITY;
-ALTER TABLE challenge_participants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE active_challenges DISABLE ROW LEVEL SECURITY;
-ALTER TABLE challenge_progress DISABLE ROW LEVEL SECURITY;
-ALTER TABLE xp_transactions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE member_achievements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE improvement_proposals DISABLE ROW LEVEL SECURITY;
-ALTER TABLE proposal_votes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE special_templates DISABLE ROW LEVEL SECURITY;
-ALTER TABLE change_log DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_favorites DISABLE ROW LEVEL SECURITY;
-
--- ========== POLÍTICAS RLS SIMPLIFICADAS ==========
--- Solo políticas básicas para autenticación y datos públicos
+-- ========== POLITICAS RLS ==========
+-- Politicas permisivas para usuarios autenticados (la logica de negocio se controla desde la app)
 
 -- ========== PROFILES ==========
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
@@ -531,45 +532,157 @@ CREATE POLICY "Users can insert own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- ========== HOMES ==========
--- Cualquier usuario autenticado puede crear hogares
-DROP POLICY IF EXISTS "Authenticated users can create homes" ON homes;
-CREATE POLICY "Authenticated users can create homes" ON homes
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Authenticated users can manage homes" ON homes;
+CREATE POLICY "Authenticated users can manage homes" ON homes
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
--- Cualquier usuario autenticado puede ver hogares (la app filtra por membresía)
-DROP POLICY IF EXISTS "Authenticated users can view homes" ON homes;
-CREATE POLICY "Authenticated users can view homes" ON homes
-  FOR SELECT USING (auth.uid() IS NOT NULL);
+-- ========== HOME_MEMBERS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage home_members" ON home_members;
+CREATE POLICY "Authenticated users can manage home_members" ON home_members
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
--- Cualquier usuario autenticado puede actualizar hogares (la app valida permisos)
-DROP POLICY IF EXISTS "Authenticated users can update homes" ON homes;
-CREATE POLICY "Authenticated users can update homes" ON homes
-  FOR UPDATE USING (auth.uid() IS NOT NULL);
+-- ========== ZONES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage zones" ON zones;
+CREATE POLICY "Authenticated users can manage zones" ON zones
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== ZONE_PRESETS ==========
+DROP POLICY IF EXISTS "Anyone can view zone_presets" ON zone_presets;
+CREATE POLICY "Anyone can view zone_presets" ON zone_presets
+  FOR SELECT USING (true);
 
 -- ========== TASK_TEMPLATES ==========
--- Todos pueden ver plantillas públicas
+DROP POLICY IF EXISTS "Authenticated users can manage task_templates" ON task_templates;
+CREATE POLICY "Authenticated users can manage task_templates" ON task_templates
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
 DROP POLICY IF EXISTS "Anyone can view public templates" ON task_templates;
 CREATE POLICY "Anyone can view public templates" ON task_templates
-  FOR SELECT USING (is_public = true OR created_by = auth.uid() OR auth.uid() IS NOT NULL);
-
--- Usuarios autenticados pueden crear plantillas
-DROP POLICY IF EXISTS "Authenticated users can create templates" ON task_templates;
-CREATE POLICY "Authenticated users can create templates" ON task_templates
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+  FOR SELECT USING (is_public = true);
 
 -- ========== TASK_TEMPLATE_STEPS ==========
--- Todos pueden ver pasos de plantillas
+DROP POLICY IF EXISTS "Authenticated users can manage task_template_steps" ON task_template_steps;
+CREATE POLICY "Authenticated users can manage task_template_steps" ON task_template_steps
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
 DROP POLICY IF EXISTS "Anyone can view template steps" ON task_template_steps;
 CREATE POLICY "Anyone can view template steps" ON task_template_steps
   FOR SELECT USING (true);
 
--- Usuarios autenticados pueden crear pasos
-DROP POLICY IF EXISTS "Authenticated users can create template steps" ON task_template_steps;
-CREATE POLICY "Authenticated users can create template steps" ON task_template_steps
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+-- ========== TASKS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage tasks" ON tasks;
+CREATE POLICY "Authenticated users can manage tasks" ON tasks
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_STEPS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_steps" ON task_steps;
+CREATE POLICY "Authenticated users can manage task_steps" ON task_steps
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_ASSIGNMENTS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_assignments" ON task_assignments;
+CREATE POLICY "Authenticated users can manage task_assignments" ON task_assignments
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_COMPLETIONS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_completions" ON task_completions;
+CREATE POLICY "Authenticated users can manage task_completions" ON task_completions
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_STEP_COMPLETIONS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_step_completions" ON task_step_completions;
+CREATE POLICY "Authenticated users can manage task_step_completions" ON task_step_completions
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_EXCHANGE_REQUESTS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_exchange_requests" ON task_exchange_requests;
+CREATE POLICY "Authenticated users can manage task_exchange_requests" ON task_exchange_requests
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_FAVORITES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_favorites" ON task_favorites;
+CREATE POLICY "Authenticated users can manage task_favorites" ON task_favorites
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== TASK_CANCELLATIONS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage task_cancellations" ON task_cancellations;
+CREATE POLICY "Authenticated users can manage task_cancellations" ON task_cancellations
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== CHALLENGES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage challenges" ON challenges;
+CREATE POLICY "Authenticated users can manage challenges" ON challenges
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== CHALLENGE_TEMPLATES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage challenge_templates" ON challenge_templates;
+CREATE POLICY "Authenticated users can manage challenge_templates" ON challenge_templates
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "Anyone can view challenge_templates" ON challenge_templates;
+CREATE POLICY "Anyone can view challenge_templates" ON challenge_templates
+  FOR SELECT USING (true);
+
+-- ========== CHALLENGE_PARTICIPANTS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage challenge_participants" ON challenge_participants;
+CREATE POLICY "Authenticated users can manage challenge_participants" ON challenge_participants
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== ACTIVE_CHALLENGES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage active_challenges" ON active_challenges;
+CREATE POLICY "Authenticated users can manage active_challenges" ON active_challenges
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== CHALLENGE_PROGRESS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage challenge_progress" ON challenge_progress;
+CREATE POLICY "Authenticated users can manage challenge_progress" ON challenge_progress
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== XP_TRANSACTIONS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage xp_transactions" ON xp_transactions;
+CREATE POLICY "Authenticated users can manage xp_transactions" ON xp_transactions
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
 -- ========== ACHIEVEMENTS ==========
--- Todos pueden ver achievements (son datos públicos/de referencia)
 DROP POLICY IF EXISTS "Anyone can view achievements" ON achievements;
 CREATE POLICY "Anyone can view achievements" ON achievements
   FOR SELECT USING (true);
+
+-- ========== MEMBER_ACHIEVEMENTS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage member_achievements" ON member_achievements;
+CREATE POLICY "Authenticated users can manage member_achievements" ON member_achievements
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== IMPROVEMENT_PROPOSALS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage improvement_proposals" ON improvement_proposals;
+CREATE POLICY "Authenticated users can manage improvement_proposals" ON improvement_proposals
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== PROPOSAL_VOTES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage proposal_votes" ON proposal_votes;
+CREATE POLICY "Authenticated users can manage proposal_votes" ON proposal_votes
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== SPECIAL_TEMPLATES ==========
+DROP POLICY IF EXISTS "Authenticated users can manage special_templates" ON special_templates;
+CREATE POLICY "Authenticated users can manage special_templates" ON special_templates
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "Anyone can view special_templates" ON special_templates;
+CREATE POLICY "Anyone can view special_templates" ON special_templates
+  FOR SELECT USING (true);
+
+-- ========== CHANGE_LOG ==========
+DROP POLICY IF EXISTS "Authenticated users can manage change_log" ON change_log;
+CREATE POLICY "Authenticated users can manage change_log" ON change_log
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== INDEXES ==========
+-- Index for swap request lookups
+CREATE INDEX IF NOT EXISTS idx_task_exchange_requests_target_assignment 
+ON task_exchange_requests(target_assignment_id);
+
+-- Index for pending requests by target member
+CREATE INDEX IF NOT EXISTS idx_task_exchange_requests_target_pending 
+ON task_exchange_requests(target_member_id, status) 
+WHERE status = 'pending';
