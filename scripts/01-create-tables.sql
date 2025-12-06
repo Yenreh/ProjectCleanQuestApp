@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS home_members (
   weeks_active INTEGER NOT NULL DEFAULT 0,
   tasks_completed INTEGER NOT NULL DEFAULT 0,
   current_streak INTEGER NOT NULL DEFAULT 0,
+  -- XP and Stats
+  total_xp INTEGER NOT NULL DEFAULT 0,
+  challenges_completed INTEGER NOT NULL DEFAULT 0,
+  group_challenges_completed INTEGER NOT NULL DEFAULT 0,
+  speed_challenges_completed INTEGER NOT NULL DEFAULT 0,
+  perfect_challenges INTEGER NOT NULL DEFAULT 0,
   -- Notification and preference columns
   email_notifications BOOLEAN DEFAULT true,
   push_notifications BOOLEAN DEFAULT true,
@@ -112,6 +118,25 @@ CREATE TABLE IF NOT EXISTS task_completions (
   points_earned INTEGER NOT NULL DEFAULT 0
 );
 
+-- Tabla de plantillas de desafíos
+CREATE TABLE IF NOT EXISTS challenge_templates (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  challenge_type TEXT NOT NULL CHECK (challenge_type IN ('individual', 'group')),
+  category TEXT NOT NULL CHECK (category IN ('task_completion', 'streak', 'speed', 'variety', 'mastery', 'team_goal', 'zone_blitz', 'collective', 'perfect_week', 'support')),
+  requirements JSONB NOT NULL,
+  duration_type TEXT NOT NULL CHECK (duration_type IN ('daily', 'quarter_cycle', 'half_cycle', 'full_cycle', 'multi_cycle')),
+  duration_multiplier DECIMAL(3,2) DEFAULT 1.0,
+  base_xp INTEGER NOT NULL DEFAULT 50,
+  difficulty_multiplier DECIMAL(3,2) DEFAULT 1.0,
+  min_mastery_level TEXT CHECK (min_mastery_level IN ('novice', 'solver', 'expert', 'master', 'visionary')),
+  requires_min_tasks INTEGER DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Tabla de desafíos del hogar
 CREATE TABLE IF NOT EXISTS challenges (
   id SERIAL PRIMARY KEY,
@@ -125,6 +150,11 @@ CREATE TABLE IF NOT EXISTS challenges (
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   start_date DATE,
   end_date DATE,
+  -- New columns for enhanced system
+  template_id INTEGER REFERENCES challenge_templates(id) ON DELETE SET NULL,
+  duration_type TEXT CHECK (duration_type IN ('daily', 'quarter_cycle', 'half_cycle', 'full_cycle', 'multi_cycle')),
+  cycle_aligned BOOLEAN DEFAULT TRUE,
+  xp_reward INTEGER,
   created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -139,6 +169,52 @@ CREATE TABLE IF NOT EXISTS challenge_participants (
   joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   completed_at TIMESTAMP WITH TIME ZONE,
   UNIQUE(challenge_id, member_id)
+);
+
+-- Active Challenges: Instances of challenges currently running
+CREATE TABLE IF NOT EXISTS active_challenges (
+  id SERIAL PRIMARY KEY,
+  template_id INTEGER REFERENCES challenge_templates(id) ON DELETE SET NULL,
+  home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  challenge_type TEXT NOT NULL CHECK (challenge_type IN ('individual', 'group')),
+  category TEXT NOT NULL,
+  requirements JSONB NOT NULL,
+  start_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  cycle_aligned BOOLEAN NOT NULL DEFAULT TRUE,
+  xp_reward INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'expired', 'cancelled')),
+  assigned_to INTEGER REFERENCES home_members(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Challenge Progress: Track individual member progress on challenges
+CREATE TABLE IF NOT EXISTS challenge_progress (
+  id SERIAL PRIMARY KEY,
+  challenge_id INTEGER NOT NULL REFERENCES active_challenges(id) ON DELETE CASCADE,
+  member_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  progress_data JSONB NOT NULL DEFAULT '{}',
+  is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  xp_awarded INTEGER DEFAULT 0,
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(challenge_id, member_id)
+);
+
+-- XP Transactions: Audit log for all XP gains
+CREATE TABLE IF NOT EXISTS xp_transactions (
+  id SERIAL PRIMARY KEY,
+  member_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  amount INTEGER NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('task_completion', 'challenge_completion', 'achievement_unlock', 'bonus', 'level_up', 'streak_bonus')),
+  reference_type TEXT,
+  reference_id INTEGER,
+  description TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Tabla de insignias/achievements
@@ -332,6 +408,30 @@ CREATE INDEX IF NOT EXISTS idx_cancellations_available ON task_cancellations(is_
 CREATE INDEX IF NOT EXISTS idx_cancellations_assignment ON task_cancellations(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_cancellations_cancelled_by ON task_cancellations(cancelled_by);
 
+-- Challenge System Indexes
+CREATE INDEX IF NOT EXISTS idx_challenge_templates_active ON challenge_templates(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_challenge_templates_type ON challenge_templates(challenge_type);
+CREATE INDEX IF NOT EXISTS idx_challenge_templates_category ON challenge_templates(category);
+
+CREATE INDEX IF NOT EXISTS idx_active_challenges_home ON active_challenges(home_id);
+CREATE INDEX IF NOT EXISTS idx_active_challenges_status ON active_challenges(status);
+CREATE INDEX IF NOT EXISTS idx_active_challenges_assigned ON active_challenges(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_active_challenges_dates ON active_challenges(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_active_challenges_home_status ON active_challenges(home_id, status) WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS idx_challenge_progress_challenge ON challenge_progress(challenge_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_progress_member ON challenge_progress(member_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_progress_completed ON challenge_progress(is_completed);
+CREATE INDEX IF NOT EXISTS idx_challenge_progress_member_active ON challenge_progress(member_id, is_completed) WHERE is_completed = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_xp_transactions_member ON xp_transactions(member_id);
+CREATE INDEX IF NOT EXISTS idx_xp_transactions_source ON xp_transactions(source);
+CREATE INDEX IF NOT EXISTS idx_xp_transactions_created ON xp_transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_xp_transactions_reference ON xp_transactions(reference_type, reference_id);
+
+CREATE INDEX IF NOT EXISTS idx_home_members_xp ON home_members(total_xp DESC);
+CREATE INDEX IF NOT EXISTS idx_home_members_challenges ON home_members(challenges_completed DESC);
+
 -- ========== ÍNDICES COMPUESTOS CRÍTICOS PARA PERFORMANCE ==========
 -- Estos índices compuestos optimizan las queries más frecuentes de la aplicación
 
@@ -383,7 +483,9 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE homes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_template_steps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_exchange_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenge_templates ENABLE ROW LEVEL SECURITY;
 
 -- Deshabilitar RLS en tablas de datos operacionales (el control se hace desde la app)
 ALTER TABLE zones DISABLE ROW LEVEL SECURITY;
@@ -395,12 +497,14 @@ ALTER TABLE task_steps DISABLE ROW LEVEL SECURITY;
 ALTER TABLE task_step_completions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE challenges DISABLE ROW LEVEL SECURITY;
 ALTER TABLE challenge_participants DISABLE ROW LEVEL SECURITY;
+ALTER TABLE active_challenges DISABLE ROW LEVEL SECURITY;
+ALTER TABLE challenge_progress DISABLE ROW LEVEL SECURITY;
+ALTER TABLE xp_transactions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE member_achievements DISABLE ROW LEVEL SECURITY;
 ALTER TABLE improvement_proposals DISABLE ROW LEVEL SECURITY;
 ALTER TABLE proposal_votes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE special_templates DISABLE ROW LEVEL SECURITY;
 ALTER TABLE change_log DISABLE ROW LEVEL SECURITY;
-ALTER TABLE task_exchange_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE task_favorites DISABLE ROW LEVEL SECURITY;
 
 -- ========== POLÍTICAS RLS SIMPLIFICADAS ==========

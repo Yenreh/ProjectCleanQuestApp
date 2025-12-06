@@ -11,8 +11,12 @@ DROP TABLE IF EXISTS proposal_votes CASCADE;
 DROP TABLE IF EXISTS improvement_proposals CASCADE;
 
 -- 2. Tablas de desafíos
+DROP TABLE IF EXISTS xp_transactions CASCADE;
+DROP TABLE IF EXISTS challenge_progress CASCADE;
+DROP TABLE IF EXISTS active_challenges CASCADE;
 DROP TABLE IF EXISTS challenge_participants CASCADE;
 DROP TABLE IF EXISTS challenges CASCADE;
+DROP TABLE IF EXISTS challenge_templates CASCADE;
 
 -- 3. Tablas de logros
 DROP TABLE IF EXISTS member_achievements CASCADE;
