@@ -51,6 +51,8 @@ interface OnboardingState {
   firstTaskProgress: number;
   
   // Loading states
+  isCreatingHome: boolean;
+  isContinuingRoommates: boolean;
   isCreatingTasks: boolean;
   
   // Actions
@@ -92,6 +94,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       zones: [],
       createdHomeId: null,
       firstTaskProgress: 0,
+      isCreatingHome: false,
+      isContinuingRoommates: false,
       isCreatingTasks: false,
 
       // Load zone presets from database
@@ -139,6 +143,8 @@ export const useOnboardingStore = create<OnboardingState>()(
           return;
         }
 
+        set({ isCreatingHome: true });
+
         try {
           const user = await db.getCurrentUser();
           if (!user) {
@@ -174,12 +180,14 @@ export const useOnboardingStore = create<OnboardingState>()(
           const newCompletedSteps = new Set([...completedSteps, "create-home" as Step]);
           set({ 
             completedSteps: newCompletedSteps,
-            currentStep: "add-roommates"
+            currentStep: "add-roommates",
+            isCreatingHome: false
           });
           
           toast.success("¡Casa creada, bienvenido! 🏡");
         } catch (error) {
           console.error('Error creando casa:', error);
+          set({ isCreatingHome: false });
           toast.error('Error al crear la casa. Intenta de nuevo.');
         }
       },
@@ -261,8 +269,11 @@ export const useOnboardingStore = create<OnboardingState>()(
       skipRoommates: () => {
         const { roommates } = get();
         
+        set({ isContinuingRoommates: true });
+        
         set(state => ({
           completedSteps: new Set([...state.completedSteps, "add-roommates" as Step]),
+          isContinuingRoommates: false,
           currentStep: "add-tasks"
         }));
         
