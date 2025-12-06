@@ -533,6 +533,8 @@ ALTER TABLE improvement_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE special_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE change_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE home_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE home_alert_reads ENABLE ROW LEVEL SECURITY;
 
 -- ========== POLITICAS RLS ==========
 -- Politicas permisivas para usuarios autenticados (la logica de negocio se controla desde la app)
@@ -701,6 +703,16 @@ CREATE POLICY "Anyone can view special_templates" ON special_templates
 -- ========== CHANGE_LOG ==========
 DROP POLICY IF EXISTS "Authenticated users can manage change_log" ON change_log;
 CREATE POLICY "Authenticated users can manage change_log" ON change_log
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== HOME_ALERTS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage home_alerts" ON home_alerts;
+CREATE POLICY "Authenticated users can manage home_alerts" ON home_alerts
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+-- ========== HOME_ALERT_READS ==========
+DROP POLICY IF EXISTS "Authenticated users can manage home_alert_reads" ON home_alert_reads;
+CREATE POLICY "Authenticated users can manage home_alert_reads" ON home_alert_reads
   FOR ALL USING (auth.uid() IS NOT NULL);
 
 -- ========== INDEXES ==========

@@ -4,6 +4,12 @@ Historial de cambios del proyecto basado en commits.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [1.0.1] - 2025-12-06
+
+### Added
+
+- Se ha habilitado RLS y agregado las políticas para las tablas `home_alerts` y `home_alert_read` 
+
 ## [1.0.0] - 2025-12-06
 
 ### Added
