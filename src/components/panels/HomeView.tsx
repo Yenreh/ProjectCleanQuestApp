@@ -3,12 +3,13 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
-import { CheckCircle2, Circle, XCircle, TrendingUp, Zap, Users, Clock, Trash2, UtensilsCrossed, Sparkles, Loader2, AlertCircle, ClipboardList, Heart, ArrowRightLeft, Ban, Lightbulb } from "lucide-react";
+import { CheckCircle2, Circle, XCircle, TrendingUp, Zap, Users, Clock, Trash2, UtensilsCrossed, Sparkles, Loader2, AlertCircle, ClipboardList, Heart, ArrowRightLeft, Ban, Lightbulb, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 import { CancelTaskDialog } from "../dialogs/CancelTaskDialog";
 import { AvailableTasksDialog } from "../dialogs/AvailableTasksDialog";
 import { CompleteTaskDialog } from "../dialogs/CompleteTaskDialog";
 import { SwapTaskDialog } from "../dialogs/SwapTaskDialog";
+import { InconvenienceAlertDialog } from "../dialogs/InconvenienceAlertDialog";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
 import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../../lib/types";
@@ -61,6 +62,7 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
   
   // Metrics from homeStore or local state (metrics is view-specific for now)
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null);
+  const [alertDialogOpen, setAlertDialogOpen] = useState(false);
   
   const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || "Usuario";
 
@@ -254,11 +256,23 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
       {(masteryLevel === "novice" || masteryLevel === "solver" || masteryLevel === "expert" || masteryLevel === "master" || masteryLevel === "visionary") && (
         <Button 
           variant="outline" 
-          className="w-full mb-4"
+          className="w-full mb-4 btn-available-tasks"
           onClick={() => setAvailableTasksOpen(true)}
         >
           <ClipboardList className="w-4 h-4 mr-2" />
           Ver tareas disponibles
+        </Button>
+      )}
+
+      {/* Alert Button - Send inconvenience notification to home members */}
+      {homeId && (
+        <Button 
+          variant="outline" 
+          className="w-full mb-4 btn-alert"
+          onClick={() => setAlertDialogOpen(true)}
+        >
+          <AlertTriangle className="w-4 h-4 mr-2" />
+          Enviar aviso al hogar
         </Button>
       )}
 
@@ -500,6 +514,15 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
           }
         }}
       />
+
+      {/* Inconvenience Alert Dialog */}
+      {homeId && (
+        <InconvenienceAlertDialog
+          open={alertDialogOpen}
+          onOpenChange={setAlertDialogOpen}
+          homeId={homeId}
+        />
+      )}
     </div>
   );
 });

@@ -12,7 +12,7 @@ export type MemberStatus = "pending" | "active" | "inactive"
 
 export type AssignmentStatus = "pending" | "in_progress" | "completed" | "skipped_expired" | "skipped_cancelled" | "skipped_reassigned"
 
-export type ChallengeType = "group" | "personal" | "strategic"
+export type ChallengeType = "group" | "individual"
 
 export type ChallengeParticipantStatus = "joined" | "completed" | "abandoned"
 

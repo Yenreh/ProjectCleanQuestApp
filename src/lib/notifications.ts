@@ -1,4 +1,4 @@
-export type NotificationType = 'invitation' | 'message' | 'alert' | 'achievement' | 'task_reminder' | 'swap_request';
+export type NotificationType = 'invitation' | 'message' | 'alert' | 'achievement' | 'task_reminder' | 'swap_request' | 'inconvenience';
 
 export interface BaseNotification {
   id: string;
@@ -30,6 +30,16 @@ export interface SwapRequestNotification extends BaseNotification {
     requesterTaskIcon: string;
     targetTaskTitle: string;
     targetTaskIcon: string;
+  };
+}
+
+export interface InconvenienceNotification extends BaseNotification {
+  type: 'inconvenience';
+  action: 'view_inconvenience';
+  data: {
+    alertId: number;
+    senderName: string;
+    message: string;
   };
 }
 
@@ -70,6 +80,7 @@ export interface TaskReminderNotification extends BaseNotification {
 export type Notification = 
   | InvitationNotification 
   | SwapRequestNotification
+  | InconvenienceNotification
   | MessageNotification 
   | AlertNotification 
   | AchievementNotification 

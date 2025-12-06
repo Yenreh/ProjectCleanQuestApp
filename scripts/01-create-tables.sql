@@ -380,6 +380,25 @@ CREATE TABLE IF NOT EXISTS task_cancellations (
   UNIQUE(assignment_id)
 );
 
+-- Tabla de alertas de inconvenientes (notificaciones entre miembros del hogar)
+CREATE TABLE IF NOT EXISTS home_alerts (
+  id SERIAL PRIMARY KEY,
+  home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+  created_by INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '7 days')
+);
+
+-- Tabla de alertas vistas por cada miembro
+CREATE TABLE IF NOT EXISTS home_alert_reads (
+  id SERIAL PRIMARY KEY,
+  alert_id INTEGER NOT NULL REFERENCES home_alerts(id) ON DELETE CASCADE,
+  member_id INTEGER NOT NULL REFERENCES home_members(id) ON DELETE CASCADE,
+  read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(alert_id, member_id)
+);
+
 -- Índices para optimizar consultas
 CREATE INDEX IF NOT EXISTS idx_homes_created_by ON homes(created_by);
 CREATE INDEX IF NOT EXISTS idx_zones_home ON zones(home_id);
@@ -408,6 +427,13 @@ CREATE INDEX IF NOT EXISTS idx_task_favorites_task ON task_favorites(task_id);
 CREATE INDEX IF NOT EXISTS idx_cancellations_available ON task_cancellations(is_available) WHERE is_available = TRUE;
 CREATE INDEX IF NOT EXISTS idx_cancellations_assignment ON task_cancellations(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_cancellations_cancelled_by ON task_cancellations(cancelled_by);
+
+-- Índices para alertas de inconvenientes
+CREATE INDEX IF NOT EXISTS idx_home_alerts_home ON home_alerts(home_id);
+CREATE INDEX IF NOT EXISTS idx_home_alerts_created_by ON home_alerts(created_by);
+CREATE INDEX IF NOT EXISTS idx_home_alerts_expires ON home_alerts(expires_at);
+CREATE INDEX IF NOT EXISTS idx_home_alert_reads_alert ON home_alert_reads(alert_id);
+CREATE INDEX IF NOT EXISTS idx_home_alert_reads_member ON home_alert_reads(member_id);
 
 -- Challenge System Indexes
 CREATE INDEX IF NOT EXISTS idx_challenge_templates_active ON challenge_templates(is_active) WHERE is_active = TRUE;

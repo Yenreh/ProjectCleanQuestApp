@@ -33,6 +33,10 @@ DROP TABLE IF EXISTS task_exchange_requests CASCADE;
 -- 7. Tablas de cancelación de tareas
 DROP TABLE IF EXISTS task_cancellations CASCADE;
 
+-- 7b. Tablas de alertas de inconvenientes
+DROP TABLE IF EXISTS home_alert_reads CASCADE;
+DROP TABLE IF EXISTS home_alerts CASCADE;
+
 -- 8. Tablas de completaciones de pasos y tareas
 DROP TABLE IF EXISTS task_step_completions CASCADE;
 DROP TABLE IF EXISTS task_completions CASCADE;

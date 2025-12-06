@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { db } from '../lib/db';
-import { Notification, InvitationNotification, SwapRequestNotification } from '../lib/notifications';
+import { Notification, InvitationNotification, SwapRequestNotification, InconvenienceNotification } from '../lib/notifications';
 import type { SwapRequestWithDetails } from '../lib/types';
 
 interface Invitation {
@@ -18,7 +18,19 @@ interface Invitation {
   };
 }
 
-// Función para convertir una invitación de DB a notificación
+interface HomeAlert {
+  id: number;
+  message: string;
+  created_at: string;
+  created_by: number;
+  home_members: {
+    id: number;
+    full_name: string | null;
+    email: string;
+  };
+}
+
+// Funcion para convertir una invitacion de DB a notificacion
 function invitationToNotification(invitation: Invitation): InvitationNotification {
   const ownerName = invitation.homes.profiles?.full_name || invitation.homes.profiles?.email;
   return {
@@ -38,7 +50,7 @@ function invitationToNotification(invitation: Invitation): InvitationNotificatio
   };
 }
 
-// Función para convertir una solicitud de intercambio a notificación
+// Funcion para convertir una solicitud de intercambio a notificacion
 function swapRequestToNotification(request: SwapRequestWithDetails): SwapRequestNotification {
   const requesterName = request.requester.profiles?.full_name || request.requester.full_name || request.requester.email;
   const requesterTask = request.task_assignments?.tasks;
@@ -62,12 +74,31 @@ function swapRequestToNotification(request: SwapRequestWithDetails): SwapRequest
   };
 }
 
+// Funcion para convertir una alerta de inconveniente a notificacion
+function homeAlertToNotification(alert: HomeAlert): InconvenienceNotification {
+  const senderName = alert.home_members?.full_name || alert.home_members?.email || 'Un miembro';
+  return {
+    id: `alert-${alert.id}`,
+    type: 'inconvenience',
+    message: alert.message,
+    createdAt: new Date(alert.created_at),
+    read: false,
+    action: 'view_inconvenience',
+    data: {
+      alertId: alert.id,
+      senderName: senderName,
+      message: alert.message
+    }
+  };
+}
+
 interface NotificationState {
   // State
   notifications: Notification[];
   isLoading: boolean;
   userEmail: string | null;
   currentMemberId: number | null;
+  currentHomeId: number | null;
   
   // Computed
   unreadCount: () => number;
@@ -75,8 +106,10 @@ interface NotificationState {
   // Actions
   setUserEmail: (email: string | null) => void;
   setCurrentMemberId: (memberId: number | null) => void;
-  loadNotifications: (email?: string, memberId?: number) => Promise<void>;
+  setCurrentHomeId: (homeId: number | null) => void;
+  loadNotifications: (email?: string, memberId?: number, homeId?: number) => Promise<void>;
   markAsRead: (notificationId: string) => void;
+  markAlertAsRead: (alertId: number) => Promise<void>;
   markAllAsRead: () => void;
   clearNotifications: () => void;
 }
@@ -89,6 +122,7 @@ export const useNotificationStore = create<NotificationState>()(
       isLoading: false,
       userEmail: null,
       currentMemberId: null,
+      currentHomeId: null,
       
       // Computed
       unreadCount: () => {
@@ -99,7 +133,8 @@ export const useNotificationStore = create<NotificationState>()(
       setUserEmail: (email) => {
         set({ userEmail: email });
         if (email) {
-          get().loadNotifications(email, get().currentMemberId || undefined);
+          const { currentMemberId, currentHomeId } = get();
+          get().loadNotifications(email, currentMemberId || undefined, currentHomeId || undefined);
         } else {
           set({ notifications: [] });
         }
@@ -108,13 +143,23 @@ export const useNotificationStore = create<NotificationState>()(
       setCurrentMemberId: (memberId) => {
         set({ currentMemberId: memberId });
         if (memberId) {
-          get().loadNotifications(get().userEmail || undefined, memberId);
+          const { userEmail, currentHomeId } = get();
+          get().loadNotifications(userEmail || undefined, memberId, currentHomeId || undefined);
         }
       },
       
-      loadNotifications: async (email?: string, memberId?: number) => {
+      setCurrentHomeId: (homeId) => {
+        set({ currentHomeId: homeId });
+        if (homeId) {
+          const { userEmail, currentMemberId } = get();
+          get().loadNotifications(userEmail || undefined, currentMemberId || undefined, homeId);
+        }
+      },
+      
+      loadNotifications: async (email?: string, memberId?: number, homeId?: number) => {
         const targetEmail = email || get().userEmail;
         const targetMemberId = memberId || get().currentMemberId;
+        const targetHomeId = homeId || get().currentHomeId;
         
         if (!targetEmail && !targetMemberId) {
           set({ notifications: [] });
@@ -137,7 +182,15 @@ export const useNotificationStore = create<NotificationState>()(
           if (targetMemberId) {
             const swapRequests = await db.getPendingSwapRequests(targetMemberId);
             for (const request of swapRequests) {
-              allNotifications.push(swapRequestToNotification(request as SwapRequestWithDetails));
+              allNotifications.push(swapRequestToNotification(request as unknown as SwapRequestWithDetails));
+            }
+          }
+          
+          // Load home alerts (inconvenience notifications)
+          if (targetHomeId && targetMemberId) {
+            const homeAlerts = await db.getUnreadHomeAlerts(targetHomeId, targetMemberId);
+            for (const alert of homeAlerts) {
+              allNotifications.push(homeAlertToNotification(alert as HomeAlert));
             }
           }
           
@@ -156,6 +209,21 @@ export const useNotificationStore = create<NotificationState>()(
             n.id === notificationId ? { ...n, read: true } : n
           )
         }));
+      },
+      
+      markAlertAsRead: async (alertId: number) => {
+        const { currentMemberId } = get();
+        if (!currentMemberId) return;
+        
+        try {
+          await db.markAlertAsRead(alertId, currentMemberId);
+          // Remove from notifications list
+          set((state) => ({
+            notifications: state.notifications.filter(n => n.id !== `alert-${alertId}`)
+          }));
+        } catch (error) {
+          console.error('Error marking alert as read:', error);
+        }
       },
       
       markAllAsRead: () => {

@@ -82,7 +82,7 @@ export default function App() {
 
   // Setup notifications when user email or member changes
   useEffect(() => {
-    const { setUserEmail, setCurrentMemberId } = useNotificationStore.getState();
+    const { setUserEmail, setCurrentMemberId, setCurrentHomeId } = useNotificationStore.getState();
     if (currentUser?.email) {
       setUserEmail(currentUser.email);
     } else {
@@ -94,7 +94,13 @@ export default function App() {
     } else {
       setCurrentMemberId(null);
     }
-  }, [currentUser?.email, currentMember?.id]);
+    // Set home ID for inconvenience alerts
+    if (currentHome?.id) {
+      setCurrentHomeId(currentHome.id);
+    } else {
+      setCurrentHomeId(null);
+    }
+  }, [currentUser?.email, currentMember?.id, currentHome?.id]);
 
   // Check for pending invitations when currentUser is loaded
   useEffect(() => {

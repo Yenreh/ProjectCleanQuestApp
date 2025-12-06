@@ -292,18 +292,19 @@ export const achievementsModule = {
 
   // ========== MASTERY LEVEL (Legacy) ==========
 
-  async updateMasteryLevel(memberId: number) {
+  async updateMasteryLevel(memberId: number): Promise<string | null> {
     if (!supabase) throw new Error('Supabase not configured');
 
     const { data: member } = await supabase
       .from('home_members')
-      .select('total_points')
+      .select('total_points, mastery_level')
       .eq('id', memberId)
       .single();
 
-    if (!member) return;
+    if (!member) return null;
 
     const points = member.total_points || 0;
+    const currentLevel = member.mastery_level || 'novice';
     let newLevel = 'novice';
 
     if (points >= 1000) newLevel = 'visionary';
@@ -311,10 +312,16 @@ export const achievementsModule = {
     else if (points >= 200) newLevel = 'expert';
     else if (points >= 50) newLevel = 'solver';
 
-    await supabase
-      .from('home_members')
-      .update({ mastery_level: newLevel })
-      .eq('id', memberId);
+    // Only update if level changed
+    if (newLevel !== currentLevel) {
+      await supabase
+        .from('home_members')
+        .update({ mastery_level: newLevel })
+        .eq('id', memberId);
+      return newLevel;
+    }
+
+    return null;
   },
 
   async updateMemberMasteryLevel(memberId: number, masteryLevel: string): Promise<void> {

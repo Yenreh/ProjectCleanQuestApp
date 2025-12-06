@@ -1,10 +1,11 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Notification, InvitationNotification, SwapRequestNotification } from "../../lib/notifications";
-import { Bell, Crown, Home, Mail, Award, ListTodo, ArrowRightLeft, CheckCircle2, XCircle, Loader2, Trash2, UtensilsCrossed, Sparkles } from "lucide-react";
+import { Notification, InvitationNotification, SwapRequestNotification, InconvenienceNotification } from "../../lib/notifications";
+import { Bell, Crown, Home, Mail, Award, ListTodo, ArrowRightLeft, CheckCircle2, XCircle, Loader2, Trash2, UtensilsCrossed, Sparkles, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
+import { useNotificationStore } from "../../stores";
 
 interface NotificationsDialogProps {
   open: boolean;
@@ -22,7 +23,8 @@ const notificationIcons = {
   alert: Bell,
   achievement: Award,
   task_reminder: ListTodo,
-  swap_request: ArrowRightLeft
+  swap_request: ArrowRightLeft,
+  inconvenience: AlertTriangle
 };
 
 const getTaskIcon = (iconName?: string) => {
@@ -43,13 +45,23 @@ export function NotificationsDialog({
   onSwapResponse
 }: NotificationsDialogProps) {
   const [respondingTo, setRespondingTo] = useState<number | null>(null);
+  const [dismissingAlert, setDismissingAlert] = useState<number | null>(null);
+  const { markAlertAsRead } = useNotificationStore();
 
   const getNotificationIcon = (type: Notification['type']) => {
     const Icon = notificationIcons[type];
+    if (type === 'inconvenience') {
+      return <Icon className="w-5 h-5 text-[#dc2626]" />;
+    }
     return <Icon className="w-5 h-5 text-[#6fbd9d]" />;
   };
 
   const getActionLabel = (notification: Notification): string | null => {
+    // Don't show action button for types that have custom buttons
+    if (notification.type === 'swap_request' || notification.type === 'inconvenience') {
+      return null;
+    }
+    
     if (!notification.action) return null;
     
     switch (notification.action) {
@@ -59,10 +71,8 @@ export function NotificationsDialog({
         return 'Ver logro';
       case 'view_task':
         return 'Ver tarea';
-      case 'view_swap_request':
-        return null; // We handle swap requests with accept/reject buttons
       default:
-        return 'Ver';
+        return null;
     }
   };
 
@@ -106,21 +116,43 @@ export function NotificationsDialog({
             notifications.map((notification) => {
               const actionLabel = getActionLabel(notification);
               const isSwapRequest = notification.type === 'swap_request';
+              const isInconvenience = notification.type === 'inconvenience';
               const swapData = isSwapRequest ? (notification as SwapRequestNotification).data : null;
+              const inconvenienceData = isInconvenience ? (notification as InconvenienceNotification).data : null;
               const isResponding = respondingTo === swapData?.requestId;
+              const isDismissing = dismissingAlert === inconvenienceData?.alertId;
+
+              const handleDismissAlert = async () => {
+                if (!inconvenienceData?.alertId) return;
+                setDismissingAlert(inconvenienceData.alertId);
+                try {
+                  await markAlertAsRead(inconvenienceData.alertId);
+                  toast.success('Alerta marcada como leida');
+                } catch (error) {
+                  console.error('Error dismissing alert:', error);
+                  toast.error('Error al marcar la alerta');
+                } finally {
+                  setDismissingAlert(null);
+                }
+              };
 
               return (
                 <div
                   key={notification.id}
-                  className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50/50' : ''}`}
+                  className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50/50' : ''} ${isInconvenience ? 'border-l-4 border-l-[#ef4444] border-[#fecaca] bg-[#fef2f2]' : ''}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-1">
+                    <div className={`mt-1 ${isInconvenience ? 'p-2 bg-[#fee2e2] rounded-full' : ''}`}>
                       {getNotificationIcon(notification.type)}
                     </div>
                     
                     <div className="flex-1 space-y-2">
-                      <p className="text-sm leading-relaxed">
+                      {isInconvenience && inconvenienceData && (
+                        <div className="flex items-center gap-2 text-xs text-[#991b1b] font-medium">
+                          <span>Aviso de {inconvenienceData.senderName}</span>
+                        </div>
+                      )}
+                      <p className={`text-sm leading-relaxed ${isInconvenience ? 'text-[#7f1d1d] font-medium' : ''}`}>
                         {notification.message}
                       </p>
                       
@@ -179,6 +211,27 @@ export function NotificationsDialog({
                               )}
                             </Button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Inconvenience alert details */}
+                      {isInconvenience && (
+                        <div className="alert-button-container">
+                          <Button
+                            size="sm"
+                            className="btn-dismiss-alert-green"
+                            onClick={handleDismissAlert}
+                            disabled={isDismissing}
+                          >
+                            {isDismissing ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 mr-1" />
+                                Entendido
+                              </>
+                            )}
+                          </Button>
                         </div>
                       )}
 

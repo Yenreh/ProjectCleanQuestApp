@@ -2217,4 +2217,79 @@ export const tasksModule = {
     return Math.round((completed / total) * 100);
   },
 
+  // ========== HOME ALERTS (Inconvenience Notifications) ==========
+
+  async createHomeAlert(homeId: number, memberId: number, message: string): Promise<any> {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    const { data, error } = await supabase
+      .from('home_alerts')
+      .insert({
+        home_id: homeId,
+        created_by: memberId,
+        message: message
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async getUnreadHomeAlerts(homeId: number, memberId: number): Promise<any[]> {
+    if (!supabase) return [];
+    
+    // Get alerts that the member hasn't read yet
+    const { data, error } = await supabase
+      .from('home_alerts')
+      .select(`
+        id,
+        message,
+        created_at,
+        expires_at,
+        created_by,
+        home_members!home_alerts_created_by_fkey (
+          id,
+          full_name,
+          email
+        )
+      `)
+      .eq('home_id', homeId)
+      .neq('created_by', memberId)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching home alerts:', error);
+      return [];
+    }
+    
+    // Filter out alerts that the member has already read
+    const { data: readAlerts } = await supabase
+      .from('home_alert_reads')
+      .select('alert_id')
+      .eq('member_id', memberId);
+    
+    const readAlertIds = new Set((readAlerts || []).map(r => r.alert_id));
+    
+    return (data || []).filter(alert => !readAlertIds.has(alert.id));
+  },
+
+  async markAlertAsRead(alertId: number, memberId: number): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+    
+    const { error } = await supabase
+      .from('home_alert_reads')
+      .insert({
+        alert_id: alertId,
+        member_id: memberId
+      })
+      .select();
+    
+    // Ignore unique constraint violations (already read)
+    if (error && !error.message.includes('duplicate')) {
+      throw error;
+    }
+  },
+
 }
