@@ -4,6 +4,52 @@ Historial de cambios del proyecto basado en commits.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [1.0.0] - 2025-12-06
+
+### Added
+
+- Sistema de alertas de inconvenientes para el hogar (`InconvenienceAlertDialog.tsx`)
+- Notificaciones de alertas de inconvenientes en `NotificationsDialog`
+- Función `initializeProgressData` para seguimiento de progreso de desafíos
+- Nuevas tablas de base de datos para alertas de inconvenientes en `01-create-tables.sql`
+- Estilos CSS adicionales para alertas y componentes de notificación (~110 líneas)
+
+### Changed
+
+- Mejorado `HomeView` con integración de alertas de inconvenientes
+- Actualizado `notificationStore` con manejo de alertas de inconvenientes (~84 líneas nuevas)
+- Mejorada terminología de tipos de desafíos (challenge type terminology)
+- Reorganizado script de reset de base de datos para mayor claridad
+- Actualizado seed data de desafíos grupales para mejor seguimiento de completación de tareas
+- Refactorizado `challenges.ts` para mejor estructura (~118 líneas modificadas)
+- Mejorado `tasks.ts` con funcionalidad adicional de alertas (~86 líneas nuevas)
+
+### Removed
+
+- Console logs innecesarios en `invitationStore`, `challengesStore` y otros módulos
+- Código de debug para verificación de email de invitación pendiente
+
+## [0.9.5] - 2025-12-05
+
+### Added
+
+- Sistema de intercambio de tareas con notificaciones y componentes de diálogo (`SwapTaskDialog.tsx`)
+- Estados de carga para creación de hogar y continuación de roommates en onboarding store
+- Campo `target_assignment_id` en `task_exchange_requests` para intercambios específicos
+- Row Level Security (RLS) habilitado para tablas adicionales
+- Indicadores de carga en pasos de onboarding
+- Nuevos tipos TypeScript para sistema de intercambio de tareas
+
+### Changed
+
+- Mejorado `NotificationsDialog` con manejo de solicitudes de intercambio de tareas
+- Mejorado `HomeView` con funcionalidad de intercambio de tareas simplificada
+- Mejorados estilos de toast para mejor visibilidad de título y descripción
+- Actualizado `onboardingStore` con estados de carga adicionales
+- Mejorado manejo de notificaciones en `notificationStore`
+- Extendido `tasks.ts` con funciones de intercambio de tareas (~328 líneas nuevas)
+- Actualizado `App.tsx` con integración de diálogo de intercambio
+
 ## [0.9.0] - 2025-12-05
 
 ### Added
