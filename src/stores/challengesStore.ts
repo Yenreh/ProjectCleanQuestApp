@@ -20,6 +20,7 @@ interface ChallengesState {
   // Actions
   loadData: (homeId: number, memberId: number) => Promise<void>;
   joinChallenge: (challengeId: number, memberId: number) => Promise<void>;
+  claimReward: (challengeId: number, memberId: number, homeId: number) => Promise<void>;
   createProposal: (homeId: number, memberId: number) => Promise<void>;
   voteOnProposal: (proposalId: number, memberId: number, vote: boolean) => Promise<void>;
   
@@ -44,18 +45,95 @@ export const useChallengesStore = create<ChallengesState>()(
         set({ isLoading: true });
         
         try {
-          const [homeChallenges, homeProposals] = await Promise.all([
-            db.getChallenges(homeId, true),
+          // 1. Initial fetch
+          let [homeChallenges, homeProposals] = await Promise.all([
+            db.getActiveChallenges(homeId, memberId),
             db.getProposals(homeId, 'voting'),
           ]);
           
+          // 2. Check and generate if needed
+          let hasGenerated = false;
+          
+          const personalChallenges = homeChallenges.filter((c: any) => 
+            c.challenge_type === 'individual' && 
+            (c.assigned_to === memberId || !c.assigned_to)
+          );
+          
+          if (personalChallenges.length === 0) {
+            console.log('No personal challenges found, generating...');
+            try {
+              await db.generateDailyChallenges(homeId, memberId);
+              hasGenerated = true;
+            } catch (err) {
+              console.error('Error generating daily challenges:', err);
+            }
+          }
+          
+          const groupChallenges = homeChallenges.filter((c: any) => 
+            c.challenge_type === 'group'
+          );
+          
+          if (groupChallenges.length === 0) {
+            console.log('No group challenges found, generating...');
+            try {
+              await db.generateCycleChallenge(homeId);
+              hasGenerated = true;
+            } catch (err) {
+              console.error('Error generating cycle challenge:', err);
+            }
+          }
+          
+          // 3. Refetch if generated
+          if (hasGenerated) {
+            homeChallenges = await db.getActiveChallenges(homeId, memberId);
+          }
+          
+          // 4. Get user's challenge progress
+          const userProgressList = await Promise.all(
+            homeChallenges.map((c: any) => db.getChallengeProgress(c.id, memberId))
+          );
+          
+          const joinedMap = new Map<number, boolean>();
+          const progressMap = new Map<number, any>();
+          
+          userProgressList.forEach((progress, index) => {
+            if (progress) {
+              joinedMap.set(homeChallenges[index].id, true);
+              progressMap.set(homeChallenges[index].id, progress);
+            }
+          });
+          
+          // Map to UI format with progress data
+          const mappedChallenges: ChallengeWithParticipants[] = homeChallenges.map((c: any) => {
+            const progress = progressMap.get(c.id);
+            return {
+              id: c.id,
+              home_id: c.home_id,
+              title: c.title,
+              description: c.description,
+              challenge_type: c.challenge_type,
+              icon: c.category || 'trophy',
+              duration_minutes: 0,
+              points_reward: c.xp_reward,
+              is_active: c.status === 'active',
+              start_date: c.start_date,
+              end_date: c.end_date,
+              created_at: c.start_date || new Date().toISOString(),
+              participant_count: 0,
+              participants: [],
+              user_joined: joinedMap.get(c.id) || false,
+              progress_data: progress?.progress_data,
+              is_completed: progress?.is_completed || false,
+              xp_awarded: progress?.xp_awarded || 0
+            };
+          });
+          
           set({
-            challenges: homeChallenges,
+            challenges: mappedChallenges,
             proposals: homeProposals,
             isLoading: false,
           });
           
-          // Load achievements separately in achievementsStore
           const achievementsStore = useAchievementsStore.getState();
           await achievementsStore.loadAchievements(memberId);
         } catch (error) {
@@ -101,6 +179,22 @@ export const useChallengesStore = create<ChallengesState>()(
           
           // Rollback on error
           set({ challenges: prevChallenges });
+        }
+      },
+
+      // Claim reward for completed challenge
+      claimReward: async (challengeId: number, memberId: number, homeId: number) => {
+        try {
+          const result = await db.claimChallengeReward(challengeId, memberId);
+          
+          toast.success(`¡Desafío completado! +${result.xpAwarded} XP`);
+          
+          // Reload challenges to update UI
+          const { loadData } = get();
+          await loadData(homeId, memberId);
+        } catch (error) {
+          console.error('Error claiming reward:', error);
+          toast.error('Error al reclamar recompensa');
         }
       },
 

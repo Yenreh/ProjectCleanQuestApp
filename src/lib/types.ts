@@ -302,6 +302,10 @@ export interface AssignmentWithDetails extends TaskAssignment {
 export interface ChallengeWithParticipants extends Challenge {
   participant_count: number
   participants?: HomeMember[]
+  user_joined?: boolean
+  progress_data?: any
+  is_completed?: boolean
+  xp_awarded?: number
 }
 
 export interface ProposalWithAuthor extends ImprovementProposal {
