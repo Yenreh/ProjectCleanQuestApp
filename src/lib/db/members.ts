@@ -460,4 +460,37 @@ export const membersModule = {
     }
   },
 
+  async incrementStats(memberId: number, stats: Record<string, number>) {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    try {
+      // 1. Get current stats
+      const { data: member, error: fetchError } = await supabase
+        .from('home_members')
+        .select(Object.keys(stats).join(','))
+        .eq('id', memberId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!member) throw new Error('Member not found');
+
+      // 2. Calculate new values
+      const updates: Record<string, number> = {};
+      for (const [key, increment] of Object.entries(stats)) {
+        updates[key] = ((member as any)[key] || 0) + increment;
+      }
+
+      // 3. Update member
+      const { error: updateError } = await supabase
+        .from('home_members')
+        .update(updates)
+        .eq('id', memberId);
+
+      if (updateError) throw updateError;
+    } catch (error) {
+      console.error('Error incrementing stats:', error);
+      throw error;
+    }
+  },
+
 }

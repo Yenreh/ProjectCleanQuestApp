@@ -103,44 +103,44 @@ SELECT id, 3, 'Organizar escritorio/muebles', TRUE FROM task_templates WHERE nam
 INSERT INTO challenge_templates (name, title, description, challenge_type, category, requirements, duration_type, base_xp, difficulty_multiplier, min_mastery_level, requires_min_tasks) VALUES
 
 -- Individual Challenges - Task Completion
-('quick_clean_1', 'Limpieza Rápida', 'Completa 1 tarea hoy', 'individual', 'task_completion', '{"task_count": 1}', 'daily', 15, 1.0, 'novice', 1),
-('zone_focus_3', 'Enfoque de Zona', 'Completa 3 tareas de la misma zona', 'individual', 'task_completion', '{"task_count": 3, "same_zone": true}', 'half_cycle', 50, 1.2, 'novice', 3),
-('task_master_5', 'Maestro de Tareas', 'Completa 5 tareas diferentes', 'individual', 'task_completion', '{"task_count": 5}', 'full_cycle', 75, 1.3, 'solver', 5),
+('quick_clean_1', 'Limpieza Rápida', 'Completa 1 tarea hoy', 'individual', 'task_completion', '{"task_count": 1}', 'daily', 20, 1.0, 'novice', 1),
+('zone_focus_3', 'Enfoque de Zona', 'Completa 3 tareas de la misma zona', 'individual', 'task_completion', '{"task_count": 3, "same_zone": true}', 'half_cycle', 60, 1.2, 'novice', 3),
+('task_master_5', 'Maestro de Tareas', 'Completa 5 tareas diferentes', 'individual', 'task_completion', '{"task_count": 5}', 'full_cycle', 100, 1.3, 'solver', 5),
 
 -- Individual Challenges - Streak
-('streak_3', 'Racha de 3', 'Completa al menos 1 tarea durante 3 días seguidos', 'individual', 'streak', '{"days": 3, "min_tasks_per_day": 1}', 'daily', 40, 1.2, 'novice', 1),
-('streak_7', 'Semana Perfecta', 'Completa al menos 1 tarea durante 7 días seguidos', 'individual', 'streak', '{"days": 7, "min_tasks_per_day": 1}', 'full_cycle', 100, 1.5, 'solver', 1),
+('streak_3', 'Racha de 3', 'Completa al menos 1 tarea durante 3 días seguidos', 'individual', 'streak', '{"days": 3, "min_tasks_per_day": 1}', 'daily', 50, 1.2, 'novice', 1),
+('streak_7', 'Semana Perfecta', 'Completa al menos 1 tarea durante 7 días seguidos', 'individual', 'streak', '{"days": 7, "min_tasks_per_day": 1}', 'full_cycle', 150, 1.5, 'solver', 1),
 
 -- Individual Challenges - Variety
-('variety_zones', 'Explorador', 'Completa tareas de 3 zonas diferentes', 'individual', 'variety', '{"zone_count": 3, "task_count": 3}', 'full_cycle', 60, 1.3, 'solver', 6),
-('all_rounder', 'Todoterreno', 'Completa al menos 1 tarea de cada zona', 'individual', 'variety', '{"all_zones": true}', 'full_cycle', 80, 1.4, 'expert', 5),
+('variety_zones', 'Explorador', 'Completa tareas de 3 zonas diferentes', 'individual', 'variety', '{"zone_count": 3, "task_count": 3}', 'full_cycle', 80, 1.3, 'solver', 6),
+('all_rounder', 'Todoterreno', 'Completa al menos 1 tarea de cada zona', 'individual', 'variety', '{"all_zones": true}', 'full_cycle', 120, 1.4, 'expert', 5),
 
 -- Individual Challenges - Mastery
-('perfect_task', 'Perfeccionista', 'Completa 1 tarea con todos sus pasos', 'individual', 'mastery', '{"task_count": 1, "all_steps": true}', 'half_cycle', 35, 1.2, 'novice', 1),
-('mastery_3', 'Maestría Total', 'Completa 3 tareas con todos sus pasos', 'individual', 'mastery', '{"task_count": 3, "all_steps": true}', 'full_cycle', 90, 1.5, 'expert', 3),
+('perfect_task', 'Perfeccionista', 'Completa 1 tarea con todos sus pasos', 'individual', 'mastery', '{"task_count": 1, "all_steps": true}', 'half_cycle', 40, 1.2, 'novice', 1),
+('mastery_3', 'Maestría Total', 'Completa 3 tareas con todos sus pasos', 'individual', 'mastery', '{"task_count": 3, "all_steps": true}', 'full_cycle', 100, 1.5, 'expert', 3),
 
 -- Individual Challenges - Speed
-('speed_demon', 'Demonio de Velocidad', 'Completa una tarea en menos de 30 minutos', 'individual', 'speed', '{"task_count": 1, "time_limit_minutes": 30}', 'daily', 25, 1.1, 'solver', 1),
+('speed_demon', 'Demonio de Velocidad', 'Completa una tarea en menos de 30 minutos', 'individual', 'speed', '{"task_count": 1, "time_limit_minutes": 30}', 'daily', 30, 1.1, 'solver', 1),
 
 -- Group Challenges - Team Goal
-('team_participation', 'Participación Total', 'Todos los miembros completan al menos 1 tarea', 'group', 'team_goal', '{"min_tasks_per_member": 1}', 'half_cycle', 60, 1.5, 'novice', 2),
-('team_effort', 'Esfuerzo en Equipo', 'Todos los miembros completan al menos 2 tareas', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 100, 1.8, 'solver', 4),
+('team_participation', 'Participación Total', 'Todos los miembros completan al menos 1 tarea', 'group', 'team_goal', '{"min_tasks_per_member": 1}', 'half_cycle', 80, 1.5, 'novice', 2),
+('team_effort', 'Esfuerzo en Equipo', 'Todos los miembros completan al menos 2 tareas', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 150, 1.8, 'solver', 4),
 
 -- Group Challenges - Collective
-('collective_10', 'Meta Colectiva', 'El equipo completa 10 tareas en total', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 80, 1.6, 'novice', 5),
-('collective_20', 'Gran Esfuerzo', 'El equipo completa 20 tareas en total', 'group', 'collective', '{"total_tasks": 20}', 'full_cycle', 150, 2.0, 'solver', 10),
+('collective_10', 'Meta Colectiva', 'El equipo completa 10 tareas en total', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 100, 1.6, 'novice', 5),
+('collective_20', 'Gran Esfuerzo', 'El equipo completa 20 tareas en total', 'group', 'collective', '{"total_tasks": 20}', 'full_cycle', 200, 2.0, 'solver', 10),
 
 -- Group Challenges - Zone Blitz
-('zone_blitz', 'Blitz de Zona', 'Completa todas las tareas de una zona específica', 'group', 'zone_blitz', '{"complete_zone": true}', 'full_cycle', 120, 1.8, 'expert', 5),
+('zone_blitz', 'Blitz de Zona', 'Completa todas las tareas de una zona específica', 'group', 'zone_blitz', '{"complete_zone": true}', 'full_cycle', 150, 1.8, 'expert', 5),
 
 -- Group Challenges - Perfect Week
-('perfect_cycle', 'Ciclo Perfecto', 'Logra 100% de cumplimiento este ciclo', 'group', 'perfect_week', '{"completion_rate": 100}', 'full_cycle', 200, 2.5, 'master', 5),
+('perfect_cycle', 'Ciclo Perfecto', 'Logra 100% de cumplimiento este ciclo', 'group', 'perfect_week', '{"completion_rate": 100}', 'full_cycle', 300, 2.5, 'master', 5),
 
 -- Additional Samples
 ('quick_clean', 'Limpieza Rápida (Sample)', 'Completa 1 tarea hoy', 'individual', 'task_completion', '{"task_count": 1}', 'daily', 20, 1.0, 'novice', 1),
-('zone_master', 'Maestro de Zona', 'Completa 3 tareas en zonas diferentes', 'individual', 'variety', '{"zone_count": 3, "task_count": 3}', 'full_cycle', 40, 1.2, 'expert', 3),
-('clean_team', 'Equipo Limpio', 'El equipo completa 10 tareas en total este ciclo', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 30, 2.0, 'novice', 5),
-('team_goal_sample', 'Meta Grupal (Sample)', 'Cada miembro completa al menos 2 tareas este ciclo', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 40, 2.5, 'solver', 5)
+('zone_master', 'Maestro de Zona', 'Completa 3 tareas en zonas diferentes', 'individual', 'variety', '{"zone_count": 3, "task_count": 3}', 'full_cycle', 60, 1.2, 'expert', 3),
+('clean_team', 'Equipo Limpio', 'El equipo completa 10 tareas en total este ciclo', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 50, 2.0, 'novice', 5),
+('team_goal_sample', 'Meta Grupal (Sample)', 'Cada miembro completa al menos 2 tareas este ciclo', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 60, 2.5, 'solver', 5)
 
 ON CONFLICT (name) DO NOTHING;
 
@@ -161,6 +161,10 @@ INSERT INTO achievements (name, title, description, icon, color, achievement_typ
 -- Special Challenge Achievements
 ('speed_demon_achievement', 'Demonio de Velocidad', 'Completa 3 desafíos de velocidad', 'zap', '#d4a574', 'individual', 'speed_challenges_completed', 3),
 ('perfectionist', 'Perfeccionista', 'Completa 5 desafíos de maestría perfectamente', 'sparkles', '#c8b5d3', 'individual', 'perfect_challenges', 5),
+
+-- Task Milestones (Extended)
+('task_150', 'Experto en Limpieza', 'Completaste 150 tareas', 'award', '#c8b5d3', 'individual', 'collaborations', 150),
+('task_200', 'Maestro del Orden', 'Completaste 200 tareas', 'crown', '#d4a574', 'individual', 'collaborations', 200),
 
 -- XP Milestones
 ('xp_100', 'Primeros 100 XP', 'Alcanza 100 XP', 'star', '#89a7c4', 'individual', 'total_xp', 100),

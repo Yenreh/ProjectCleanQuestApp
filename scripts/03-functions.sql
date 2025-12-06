@@ -29,28 +29,3 @@ BEGIN
 END;
 $$;
 
--- Function to update last_updated timestamp on challenge_progress
-CREATE OR REPLACE FUNCTION update_challenge_progress_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.last_updated = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger for challenge_progress updates
-DROP TRIGGER IF EXISTS update_challenge_progress_timestamp ON challenge_progress;
-CREATE TRIGGER update_challenge_progress_timestamp
-  BEFORE UPDATE ON challenge_progress
-  FOR EACH ROW
-  EXECUTE FUNCTION update_challenge_progress_timestamp();
-
--- Function to auto-expire challenges (called from backend)
-CREATE OR REPLACE FUNCTION expire_old_challenges() RETURNS void AS $$
-BEGIN
-  UPDATE active_challenges
-  SET status = 'expired'
-  WHERE status = 'active'
-    AND end_date < NOW();
-END;
-$$ LANGUAGE plpgsql;

@@ -447,7 +447,8 @@ export const challengesModule = {
       .update({
         progress_data: progressData,
         is_completed: isComplete,
-        completed_at: isComplete ? new Date().toISOString() : null
+        completed_at: isComplete ? new Date().toISOString() : null,
+        last_updated: new Date().toISOString()
       })
       .eq('challenge_id', challengeId)
       .eq('member_id', memberId)
@@ -519,26 +520,23 @@ export const challengesModule = {
       ? 'group_challenges_completed'
       : 'challenges_completed'
     
-    await supabase.rpc('increment', {
-      table_name: 'home_members',
-      column_name: statColumn,
-      row_id: memberId
-    })
+    // Dynamically import to avoid circular dependency if needed, 
+    // but since we are in the same directory structure, we can import at top level
+    // However, to be safe and follow the pattern:
+    const { membersModule } = await import('./members')
+    
+    const statsToUpdate: Record<string, number> = {
+      [statColumn]: 1
+    }
     
     // Update special challenge stats
     if (challenge.category === 'speed') {
-      await supabase.rpc('increment', {
-        table_name: 'home_members',
-        column_name: 'speed_challenges_completed',
-        row_id: memberId
-      })
+      statsToUpdate['speed_challenges_completed'] = 1
     } else if (challenge.category === 'mastery') {
-      await supabase.rpc('increment', {
-        table_name: 'home_members',
-        column_name: 'perfect_challenges',
-        row_id: memberId
-      })
+      statsToUpdate['perfect_challenges'] = 1
     }
+
+    await membersModule.incrementStats(memberId, statsToUpdate)
     
     return {
       xpAwarded: challenge.xp_reward,
@@ -551,7 +549,13 @@ export const challengesModule = {
   async expireOldChallenges() {
     if (!supabase) return
     
-    await supabase.rpc('expire_old_challenges')
+    const { error } = await supabase
+      .from('active_challenges')
+      .update({ status: 'expired' })
+      .eq('status', 'active')
+      .lt('end_date', new Date().toISOString())
+    
+    if (error) console.error('Error expiring old challenges:', error)
   },
 
   async getChallengeStats(homeId: number) {
