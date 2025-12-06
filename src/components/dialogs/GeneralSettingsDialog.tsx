@@ -5,7 +5,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
@@ -16,7 +15,8 @@ import {
   Loader2,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Clock
 } from "lucide-react";
 import {
   Select,
@@ -26,7 +26,9 @@ import {
   SelectValue,
 } from "../ui/select";
 import { useUnifiedSettingsStore } from "../../stores";
+import { toast } from "sonner";
 import type { HomeMember } from "../../lib/types";
+import versionInfo from "../../../version.json"
 
 interface GeneralSettingsDialogProps {
   open: boolean;
@@ -101,15 +103,11 @@ export function GeneralSettingsDialog({
   };
 
   const handleExportData = () => {
-    exportData();
-  };
-
-  const handleResetPreferences = () => {
-    resetUserPreferences();
+    toast.info("Función en desarrollo");
   };
 
   const handleResetSettings = () => {
-    resetUserPreferences();
+    toast.info("Función en desarrollo");
   };
 
   const toggleDay = (day: number) => {
@@ -156,16 +154,24 @@ export function GeneralSettingsDialog({
           {/* REMINDERS TAB */}
           <TabsContent value="reminders">
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div>
-                  <p className="text-sm font-medium">Activar recordatorios</p>
-                  <p className="text-xs text-muted-foreground">Recibe notificaciones diarias</p>
+              <div className="flex items-center justify-between p-3 m-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-[#e9f5f0] rounded-lg">
+                    <Bell className="w-4 h-4 text-[#6fbd9d]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Activar recordatorios</p>
+                    <p className="text-xs text-muted-foreground">Recibe notificaciones diarias</p>
+                  </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={reminderEnabled}
-                    onChange={(e) => setReminderEnabled(e.target.checked)}
+                    onChange={(e) => {
+                      setReminderEnabled(e.target.checked);
+                      toast.info("Función en desarrollo");
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6fbd9d]"></div>
@@ -174,25 +180,28 @@ export function GeneralSettingsDialog({
 
               {reminderEnabled && (
                 <>
-                  <div>
-                    <Label htmlFor="reminder-time" className="text-sm">Hora del recordatorio</Label>
+                  <div className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <Label htmlFor="reminder-time" className="text-sm">Hora del recordatorio</Label>
+                    </div>
                     <input
                       id="reminder-time"
                       type="time"
                       value={reminderTime}
                       onChange={(e) => setReminderTime(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md mt-1"
+                      className="w-full px-3 py-2 border rounded-md"
                     />
                   </div>
 
-                  <div>
+                  <div className="p-3">
                     <Label className="text-sm">Días de la semana</Label>
-                    <div className="!flex flex-row gap-1 mt-2 flex-wrap">
+                    <div className="flex flex-row gap-2 mt-6 justify-center">
                       {[0, 1, 2, 3, 4, 5, 6].map((day) => (
                         <button
                           key={day}
                           onClick={() => toggleDay(day)}
-                          className={`w-12 h-5 rounded-full border-2 text-xs font-medium transition-colors ${
+                          className={`w-9 h-9 rounded-full border-2 text-xs font-medium transition-colors ${
                             reminderDays.includes(day)
                               ? 'bg-[#6fbd9d] border-[#6fbd9d] text-white'
                               : 'border-gray-300 text-gray-600 hover:border-[#6fbd9d]'
@@ -224,7 +233,10 @@ export function GeneralSettingsDialog({
                 <Label className="text-sm">Tema</Label>
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   <button
-                    onClick={() => setTheme("light")}
+                    onClick={() => {
+                      setTheme("light");
+                      toast.info("Función en desarrollo");
+                    }}
                     className={`p-3 border-2 rounded-lg flex flex-col items-center gap-1 transition-colors ${
                       theme === "light"
                         ? 'border-[#6fbd9d] bg-[#e9f5f0]'
@@ -235,7 +247,10 @@ export function GeneralSettingsDialog({
                     <span className="text-xs">Claro</span>
                   </button>
                   <button
-                    onClick={() => setTheme("dark")}
+                    onClick={() => {
+                      setTheme("dark");
+                      toast.info("Función en desarrollo");
+                    }}
                     className={`p-3 border-2 rounded-lg flex flex-col items-center gap-1 transition-colors ${
                       theme === "dark"
                         ? 'border-[#6fbd9d] bg-[#e9f5f0]'
@@ -246,7 +261,10 @@ export function GeneralSettingsDialog({
                     <span className="text-xs">Oscuro</span>
                   </button>
                   <button
-                    onClick={() => setTheme("system")}
+                    onClick={() => {
+                      setTheme("system");
+                      toast.info("Función en desarrollo");
+                    }}
                     className={`p-3 border-2 rounded-lg flex flex-col items-center gap-1 transition-colors ${
                       theme === "system"
                         ? 'border-[#6fbd9d] bg-[#e9f5f0]'
@@ -261,7 +279,13 @@ export function GeneralSettingsDialog({
 
               <div>
                 <Label htmlFor="font-size" className="text-sm">Tamaño de fuente</Label>
-                <Select value={fontSize} onValueChange={(v: string) => setFontSize(v as "small" | "medium" | "large")}>
+                <Select 
+                  value={fontSize} 
+                  onValueChange={(v: string) => {
+                    setFontSize(v as "small" | "medium" | "large");
+                    toast.info("Función en desarrollo");
+                  }}
+                >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -287,7 +311,7 @@ export function GeneralSettingsDialog({
           {/* NOTIFICATIONS TAB */}
           <TabsContent value="notifications">
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                 <div>
                   <p className="text-sm font-medium">Tareas</p>
                   <p className="text-xs text-muted-foreground">Asignadas y vencimientos</p>
@@ -296,14 +320,17 @@ export function GeneralSettingsDialog({
                   <input
                     type="checkbox"
                     checked={taskNotifications}
-                    onChange={(e) => setTaskNotifications(e.target.checked)}
+                    onChange={(e) => {
+                      setTaskNotifications(e.target.checked);
+                      toast.info("Función en desarrollo");
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6fbd9d]"></div>
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                 <div>
                   <p className="text-sm font-medium">Desafíos</p>
                   <p className="text-xs text-muted-foreground">Nuevos y resultados</p>
@@ -312,14 +339,17 @@ export function GeneralSettingsDialog({
                   <input
                     type="checkbox"
                     checked={challengeNotifications}
-                    onChange={(e) => setChallengeNotifications(e.target.checked)}
+                    onChange={(e) => {
+                      setChallengeNotifications(e.target.checked);
+                      toast.info("Función en desarrollo");
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6fbd9d]"></div>
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                 <div>
                   <p className="text-sm font-medium">Insignias</p>
                   <p className="text-xs text-muted-foreground">Desbloqueadas</p>
@@ -328,14 +358,17 @@ export function GeneralSettingsDialog({
                   <input
                     type="checkbox"
                     checked={achievementNotifications}
-                    onChange={(e) => setAchievementNotifications(e.target.checked)}
+                    onChange={(e) => {
+                      setAchievementNotifications(e.target.checked);
+                      toast.info("Función en desarrollo");
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6fbd9d]"></div>
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                 <div>
                   <p className="text-sm font-medium">Resumen semanal</p>
                   <p className="text-xs text-muted-foreground">Email cada lunes</p>
@@ -344,7 +377,10 @@ export function GeneralSettingsDialog({
                   <input
                     type="checkbox"
                     checked={weeklyReport}
-                    onChange={(e) => setWeeklyReport(e.target.checked)}
+                    onChange={(e) => {
+                      setWeeklyReport(e.target.checked);
+                      toast.info("Función en desarrollo");
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6fbd9d]"></div>
@@ -385,7 +421,7 @@ export function GeneralSettingsDialog({
 
               <div className="p-3 bg-muted/30 rounded-lg mt-4">
                 <p className="text-xs text-muted-foreground mb-1">
-                  <strong>Versión:</strong> 1.0.0
+                  <strong>Versión:</strong> {versionInfo.version || '0.0.0'}
                 </p>
                 <p className="text-xs text-muted-foreground mb-1">
                   <strong>Usuario:</strong> {currentMember.email}
