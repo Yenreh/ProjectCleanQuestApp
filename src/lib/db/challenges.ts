@@ -14,6 +14,49 @@ import {
  * Handles challenge generation, progress tracking, and completion
  */
 
+// Standalone helper function to initialize progress data
+function initializeProgressData(category: string, requirements: any): any {
+  switch (category) {
+    case 'task_completion':
+      return {
+        completed_tasks: [],
+        target: requirements.task_count || 1
+      }
+    case 'streak':
+      return {
+        current_streak: 0,
+        target: requirements.days || 3,
+        last_completion: null
+      }
+    case 'variety':
+      return {
+        completed_zones: [],
+        completed_tasks: [],
+        target_zones: requirements.zone_count || 3,
+        target_tasks: requirements.task_count || 3
+      }
+    case 'mastery':
+      return {
+        completed_tasks: [],
+        target: requirements.task_count || 1,
+        all_steps_required: requirements.all_steps || false
+      }
+    case 'collective':
+      return {
+        member_contribution: 0,
+        team_total: 0,
+        target: requirements.total_tasks || 10
+      }
+    case 'team_goal':
+      return {
+        member_completed: 0,
+        target_per_member: requirements.min_tasks_per_member || 1
+      }
+    default:
+      return {}
+  }
+}
+
 export interface ChallengeTemplate {
   id: number
   name: string
@@ -250,7 +293,7 @@ export const challengesModule = {
         .insert({
           challenge_id: challenge.id,
           member_id: memberId,
-          progress_data: this.initializeProgressData(template.category, template.requirements),
+          progress_data: initializeProgressData(template.category, template.requirements),
           is_completed: false
         })
     } else if (template.challenge_type === 'group') {
@@ -268,7 +311,7 @@ export const challengesModule = {
             members.map(m => ({
               challenge_id: challenge.id,
               member_id: m.id,
-              progress_data: this.initializeProgressData(template.category, template.requirements),
+              progress_data: initializeProgressData(template.category, template.requirements),
               is_completed: false
             }))
           )
@@ -276,48 +319,6 @@ export const challengesModule = {
     }
     
     return challenge as ActiveChallenge
-  },
-
-  initializeProgressData(category: string, requirements: any): any {
-    switch (category) {
-      case 'task_completion':
-        return {
-          completed_tasks: [],
-          target: requirements.task_count || 1
-        }
-      case 'streak':
-        return {
-          current_streak: 0,
-          target: requirements.days || 3,
-          last_completion: null
-        }
-      case 'variety':
-        return {
-          completed_zones: [],
-          completed_tasks: [],
-          target_zones: requirements.zone_count || 3,
-          target_tasks: requirements.task_count || 3
-        }
-      case 'mastery':
-        return {
-          completed_tasks: [],
-          target: requirements.task_count || 1,
-          all_steps_required: requirements.all_steps || false
-        }
-      case 'collective':
-        return {
-          member_contribution: 0,
-          team_total: 0,
-          target: requirements.total_tasks || 10
-        }
-      case 'team_goal':
-        return {
-          member_completed: 0,
-          target_per_member: requirements.min_tasks_per_member || 1
-        }
-      default:
-        return {}
-    }
   },
 
   async generateDailyChallenges(homeId: number, memberId: number, count = 2): Promise<ActiveChallenge[]> {
