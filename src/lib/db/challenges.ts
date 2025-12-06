@@ -86,13 +86,19 @@ export const challengesModule = {
     if (!supabase) return []
     
     // Get member's mastery level
-    const { data: member } = await supabase
-      .from('home_members')
-      .select('mastery_level')
-      .eq('id', memberId)
-      .single()
+    let currentMasteryLevel = 'novice'
     
-    if (!member) return []
+    if (memberId > 0) {
+      const { data: member } = await supabase
+        .from('home_members')
+        .select('mastery_level')
+        .eq('id', memberId)
+        .single()
+      
+      if (member) {
+        currentMasteryLevel = member.mastery_level
+      }
+    }
     
     // Get home's active tasks count
     const { count: taskCount } = await supabase
@@ -117,7 +123,7 @@ export const challengesModule = {
     
     // Filter templates based on requirements
     const masteryLevels = ['novice', 'solver', 'expert', 'master', 'visionary']
-    const memberLevelIndex = masteryLevels.indexOf(member.mastery_level)
+    const memberLevelIndex = masteryLevels.indexOf(currentMasteryLevel)
     
     return (templates as ChallengeTemplate[]).filter(template => {
       // Check mastery level requirement
