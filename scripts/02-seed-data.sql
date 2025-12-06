@@ -127,20 +127,15 @@ INSERT INTO challenge_templates (name, title, description, challenge_type, categ
 ('team_effort', 'Esfuerzo en Equipo', 'Todos los miembros completan al menos 2 tareas', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 150, 1.8, 'solver', 4),
 
 -- Group Challenges - Collective
-('collective_10', 'Meta Colectiva', 'El equipo completa 10 tareas en total', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 100, 1.6, 'novice', 5),
-('collective_20', 'Gran Esfuerzo', 'El equipo completa 20 tareas en total', 'group', 'collective', '{"total_tasks": 20}', 'full_cycle', 200, 2.0, 'solver', 10),
+('collective_5', 'Primera Meta', 'El equipo completa 5 tareas en total', 'group', 'collective', '{"total_tasks": 5}', 'half_cycle', 60, 1.3, 'novice', 5),
+('collective_10', 'Meta Colectiva', 'El equipo completa 10 tareas en total', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 100, 1.6, 'novice', 10),
+('collective_20', 'Gran Esfuerzo', 'El equipo completa 20 tareas en total', 'group', 'collective', '{"total_tasks": 20}', 'full_cycle', 200, 2.0, 'solver', 20),
 
 -- Group Challenges - Zone Blitz
 ('zone_blitz', 'Blitz de Zona', 'Completa todas las tareas de una zona específica', 'group', 'zone_blitz', '{"complete_zone": true}', 'full_cycle', 150, 1.8, 'expert', 5),
 
 -- Group Challenges - Perfect Week
-('perfect_cycle', 'Ciclo Perfecto', 'Logra 100% de cumplimiento este ciclo', 'group', 'perfect_week', '{"completion_rate": 100}', 'full_cycle', 300, 2.5, 'master', 5),
-
--- Additional Samples
-('quick_clean', 'Limpieza Rápida (Sample)', 'Completa 1 tarea hoy', 'individual', 'task_completion', '{"task_count": 1}', 'daily', 20, 1.0, 'novice', 1),
-('zone_master', 'Maestro de Zona', 'Completa 3 tareas en zonas diferentes', 'individual', 'variety', '{"zone_count": 3, "task_count": 3}', 'full_cycle', 60, 1.2, 'expert', 3),
-('clean_team', 'Equipo Limpio', 'El equipo completa 10 tareas en total este ciclo', 'group', 'collective', '{"total_tasks": 10}', 'full_cycle', 50, 2.0, 'novice', 5),
-('team_goal_sample', 'Meta Grupal (Sample)', 'Cada miembro completa al menos 2 tareas este ciclo', 'group', 'team_goal', '{"min_tasks_per_member": 2}', 'full_cycle', 60, 2.5, 'solver', 5)
+('perfect_cycle', 'Ciclo Perfecto', 'Logra 100% de cumplimiento este ciclo', 'group', 'perfect_week', '{"completion_rate": 100}', 'full_cycle', 300, 2.5, 'master', 5)
 
 ON CONFLICT (name) DO NOTHING;
 
