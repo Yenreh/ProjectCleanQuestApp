@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { CancelTaskDialog } from "../dialogs/CancelTaskDialog";
 import { AvailableTasksDialog } from "../dialogs/AvailableTasksDialog";
 import { CompleteTaskDialog } from "../dialogs/CompleteTaskDialog";
+import { SwapTaskDialog } from "../dialogs/SwapTaskDialog";
 import { db } from "../../lib/db";
 import { toast } from "sonner";
 import type { AssignmentWithDetails, HomeMember, HomeMetrics, Profile } from "../../lib/types";
@@ -126,21 +127,6 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
   const handleOpenSwapModal = (assignment: AssignmentWithDetails) => {
     setTaskToSwap(assignment);
     setSwapModalOpen(true);
-  };
-
-  // Wrapper for swap task request
-  const handleSwapTask = async (targetAssignmentId: number) => {
-    if (!taskToSwap || !currentMember) return;
-
-    try {
-      await db.requestTaskExchange(currentMember.id, taskToSwap.id, 'swap', undefined, `Solicitud de intercambio con tarea ${targetAssignmentId}`);
-      toast.success('Solicitud de intercambio enviada');
-      setSwapModalOpen(false);
-      setTaskToSwap(null);
-    } catch (error) {
-      console.error('Error requesting swap:', error);
-      toast.error('Error al solicitar intercambio');
-    }
   };
 
   // OPTIMIZATION: Memoize helper functions
@@ -464,72 +450,23 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
       />
 
       {/* Swap Task Modal */}
-      <Dialog open={swapModalOpen} onOpenChange={setSwapModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-[#89a7c4]" />
-              <span>Intercambiar tarea</span>
-            </DialogTitle>
-            <DialogDescription>
-              Selecciona con quién intercambiar tu tarea
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            {taskToSwap && (
-              <div className="p-3 bg-[#f5f3ed] rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Tarea a intercambiar:</p>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-white text-[#d4a574]">
-                    {getTaskIcon(taskToSwap.task_icon)}
-                  </div>
-                  <span className="font-medium">{taskToSwap.task_title}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Otras tareas pendientes:</p>
-              {assignments
-                .filter(a => a.id !== taskToSwap?.id && a.status === 'pending')
-                .map(assignment => (
-                  <button
-                    key={assignment.id}
-                    onClick={() => handleSwapTask(assignment.id)}
-                    className="w-full p-3 bg-white border border-border rounded-lg hover:bg-[#f5f3ed] transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-[#f5f3ed] text-[#d4a574]">
-                        {getTaskIcon(assignment.task_icon)}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{assignment.task_title}</p>
-                        {assignment.task_zone_name && (
-                          <p className="text-xs text-muted-foreground">
-                            {assignment.task_zone_name}
-                          </p>
-                        )}
-                      </div>
-                      <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </button>
-                ))}
-            </div>
-
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSwapModalOpen(false);
-                setTaskToSwap(null);
-              }}
-              className="w-full"
-            >
-              Cancelar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SwapTaskDialog
+        open={swapModalOpen}
+        onOpenChange={(open) => {
+          setSwapModalOpen(open);
+          if (!open) setTaskToSwap(null);
+        }}
+        taskToSwap={taskToSwap}
+        homeId={homeId || 0}
+        currentMemberId={currentMember?.id || 0}
+        onSuccess={async () => {
+          // Reload assignments after swap request
+          if (currentMember && homeId) {
+            await loadAssignments(currentMember.id, homeId);
+          }
+          setTaskToSwap(null);
+        }}
+      />
 
       {/* Cancel Task Dialog */}
       <CancelTaskDialog

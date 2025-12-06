@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { db } from '../lib/db';
-import { Notification, InvitationNotification } from '../lib/notifications';
+import { Notification, InvitationNotification, SwapRequestNotification } from '../lib/notifications';
+import type { SwapRequestWithDetails } from '../lib/types';
 
 interface Invitation {
   id: string;
@@ -37,18 +38,44 @@ function invitationToNotification(invitation: Invitation): InvitationNotificatio
   };
 }
 
+// Función para convertir una solicitud de intercambio a notificación
+function swapRequestToNotification(request: SwapRequestWithDetails): SwapRequestNotification {
+  const requesterName = request.requester.profiles?.full_name || request.requester.full_name || request.requester.email;
+  const requesterTask = request.task_assignments?.tasks;
+  const targetTask = request.target_assignment?.tasks;
+  
+  return {
+    id: `swap-${request.id}`,
+    type: 'swap_request',
+    message: `${requesterName} quiere intercambiar "${requesterTask?.title || 'su tarea'}" por "${targetTask?.title || 'tu tarea'}"`,
+    createdAt: new Date(request.created_at),
+    read: false,
+    action: 'view_swap_request',
+    data: {
+      requestId: request.id,
+      requesterName: requesterName,
+      requesterTaskTitle: requesterTask?.title || 'Tarea',
+      requesterTaskIcon: requesterTask?.icon || 'check-circle',
+      targetTaskTitle: targetTask?.title || 'Tu tarea',
+      targetTaskIcon: targetTask?.icon || 'check-circle'
+    }
+  };
+}
+
 interface NotificationState {
   // State
   notifications: Notification[];
   isLoading: boolean;
   userEmail: string | null;
+  currentMemberId: number | null;
   
   // Computed
   unreadCount: () => number;
   
   // Actions
   setUserEmail: (email: string | null) => void;
-  loadNotifications: (email?: string) => Promise<void>;
+  setCurrentMemberId: (memberId: number | null) => void;
+  loadNotifications: (email?: string, memberId?: number) => Promise<void>;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
   clearNotifications: () => void;
@@ -61,6 +88,7 @@ export const useNotificationStore = create<NotificationState>()(
       notifications: [],
       isLoading: false,
       userEmail: null,
+      currentMemberId: null,
       
       // Computed
       unreadCount: () => {
@@ -71,16 +99,24 @@ export const useNotificationStore = create<NotificationState>()(
       setUserEmail: (email) => {
         set({ userEmail: email });
         if (email) {
-          get().loadNotifications(email);
+          get().loadNotifications(email, get().currentMemberId || undefined);
         } else {
           set({ notifications: [] });
         }
       },
       
-      loadNotifications: async (email?: string) => {
+      setCurrentMemberId: (memberId) => {
+        set({ currentMemberId: memberId });
+        if (memberId) {
+          get().loadNotifications(get().userEmail || undefined, memberId);
+        }
+      },
+      
+      loadNotifications: async (email?: string, memberId?: number) => {
         const targetEmail = email || get().userEmail;
+        const targetMemberId = memberId || get().currentMemberId;
         
-        if (!targetEmail) {
+        if (!targetEmail && !targetMemberId) {
           set({ notifications: [] });
           return;
         }
@@ -90,16 +126,20 @@ export const useNotificationStore = create<NotificationState>()(
           const allNotifications: Notification[] = [];
           
           // Load invitations as notifications
-          const invitation = await db.getPendingInvitationByEmail(targetEmail);
-          if (invitation) {
-            allNotifications.push(invitationToNotification(invitation));
+          if (targetEmail) {
+            const invitation = await db.getPendingInvitationByEmail(targetEmail);
+            if (invitation) {
+              allNotifications.push(invitationToNotification(invitation));
+            }
           }
           
-          // TODO: Aquí se pueden agregar más tipos de notificaciones en el futuro
-          // - Mensajes del sistema
-          // - Recordatorios de tareas
-          // - Logros desbloqueados
-          // etc.
+          // Load pending swap requests as notifications
+          if (targetMemberId) {
+            const swapRequests = await db.getPendingSwapRequests(targetMemberId);
+            for (const request of swapRequests) {
+              allNotifications.push(swapRequestToNotification(request as SwapRequestWithDetails));
+            }
+          }
           
           set({ notifications: allNotifications });
         } catch (error) {
@@ -125,7 +165,7 @@ export const useNotificationStore = create<NotificationState>()(
       },
       
       clearNotifications: () => {
-        set({ notifications: [], userEmail: null });
+        set({ notifications: [], userEmail: null, currentMemberId: null });
       }
     }),
     { name: 'NotificationStore' }

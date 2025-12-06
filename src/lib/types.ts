@@ -242,12 +242,69 @@ export interface TaskExchangeRequest {
   task_assignment_id: number
   requester_id: number
   target_member_id?: number
+  target_assignment_id?: number
   responder_id?: number
   request_type: ExchangeRequestType
   status: ExchangeRequestStatus
   message?: string
   created_at: string
   responded_at?: string
+}
+
+export interface SwappableTask {
+  id: number
+  task_id: number
+  member_id: number
+  assigned_date: string
+  due_date: string
+  status: string
+  task_title: string
+  task_icon: string
+  task_effort: number
+  task_zone_name?: string
+  task_zone_icon?: string
+  member_name?: string
+  member_email: string
+}
+
+export interface SwapRequestWithDetails {
+  id: number
+  requester_id: number
+  task_assignment_id: number
+  target_member_id: number
+  target_assignment_id?: number
+  request_type: string
+  status: string
+  message?: string
+  created_at: string
+  task_assignments: {
+    id: number
+    task_id: number
+    tasks: {
+      id: number
+      title: string
+      icon: string
+      effort_points: number
+      zones?: { name: string }
+    }
+  }
+  requester: {
+    id: number
+    email: string
+    full_name?: string
+    profiles?: { full_name: string }
+  }
+  target_assignment?: {
+    id: number
+    task_id: number
+    tasks: {
+      id: number
+      title: string
+      icon: string
+      effort_points: number
+      zones?: { name: string }
+    }
+  }
 }
 
 export interface TaskCancellation {

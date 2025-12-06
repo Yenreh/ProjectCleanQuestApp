@@ -1064,6 +1064,234 @@ export const tasksModule = {
     return data || []
   },
 
+  // Get pending swap requests where the current member is the target
+  async getPendingSwapRequests(memberId: number) {
+    if (!supabase) return []
+    
+    const { data, error } = await supabase
+      .from('task_exchange_requests')
+      .select(`
+        id,
+        requester_id,
+        task_assignment_id,
+        target_member_id,
+        request_type,
+        status,
+        message,
+        created_at,
+        task_assignments!task_assignment_id (
+          id,
+          task_id,
+          assigned_date,
+          due_date,
+          tasks (
+            id,
+            title,
+            icon,
+            effort_points,
+            zones (name)
+          )
+        ),
+        requester:home_members!requester_id (
+          id,
+          email,
+          full_name,
+          profiles (full_name)
+        ),
+        target_assignment:task_assignments!target_assignment_id (
+          id,
+          task_id,
+          tasks (
+            id,
+            title,
+            icon,
+            effort_points,
+            zones (name)
+          )
+        )
+      `)
+      .eq('target_member_id', memberId)
+      .eq('status', 'pending')
+      .eq('request_type', 'swap')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data || []
+  },
+
+  // Get other members' pending tasks for swap (excluding current member's tasks)
+  async getSwappableTasks(homeId: number, currentMemberId: number) {
+    if (!supabase) return []
+    
+    const { data, error } = await supabase
+      .from('task_assignments')
+      .select(`
+        id,
+        task_id,
+        member_id,
+        assigned_date,
+        due_date,
+        status,
+        tasks!inner (
+          id,
+          title,
+          icon,
+          effort_points,
+          home_id,
+          zones (
+            name,
+            icon
+          )
+        ),
+        home_members!inner (
+          id,
+          email,
+          full_name,
+          user_id,
+          profiles (
+            full_name
+          )
+        )
+      `)
+      .eq('tasks.home_id', homeId)
+      .eq('status', 'pending')
+      .neq('member_id', currentMemberId)
+      .order('assigned_date', { ascending: true })
+    
+    if (error) throw error
+    
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      task_id: item.task_id,
+      member_id: item.member_id,
+      assigned_date: item.assigned_date,
+      due_date: item.due_date,
+      status: item.status,
+      task_title: item.tasks.title,
+      task_icon: item.tasks.icon,
+      task_effort: item.tasks.effort_points,
+      task_zone_name: item.tasks.zones?.name,
+      task_zone_icon: item.tasks.zones?.icon,
+      member_name: item.home_members.profiles?.full_name || item.home_members.full_name,
+      member_email: item.home_members.email
+    }))
+  },
+
+  // Create a swap request with target assignment
+  async createSwapRequest(
+    requesterId: number, 
+    requesterAssignmentId: number, 
+    targetAssignmentId: number,
+    targetMemberId: number,
+    message?: string
+  ) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data, error } = await supabase
+      .from('task_exchange_requests')
+      .insert({
+        requester_id: requesterId,
+        task_assignment_id: requesterAssignmentId,
+        target_member_id: targetMemberId,
+        target_assignment_id: targetAssignmentId,
+        request_type: 'swap',
+        message: message || 'Solicitud de intercambio de tarea',
+        status: 'pending'
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Accept or reject a swap request and perform the exchange if accepted
+  async respondToSwapRequest(requestId: number, responderId: number, accept: boolean) {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    // First get the request details including target_assignment_id
+    const { data: request, error: fetchError } = await supabase
+      .from('task_exchange_requests')
+      .select(`
+        id,
+        requester_id,
+        task_assignment_id,
+        target_member_id,
+        target_assignment_id,
+        request_type,
+        status
+      `)
+      .eq('id', requestId)
+      .single()
+    
+    if (fetchError) throw fetchError
+    if (!request) throw new Error('Solicitud no encontrada')
+    
+    // Verify responder is the target member
+    if (request.target_member_id !== responderId) {
+      throw new Error('No tienes permiso para responder a esta solicitud')
+    }
+    
+    const status = accept ? 'accepted' : 'rejected'
+    
+    // Update request status
+    const { data, error } = await supabase
+      .from('task_exchange_requests')
+      .update({
+        responder_id: responderId,
+        status,
+        responded_at: new Date().toISOString()
+      })
+      .eq('id', requestId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    
+    // If accepted, perform the swap
+    if (accept && request.target_assignment_id) {
+      // Swap the member_ids between the two assignments
+      const requesterAssignmentId = request.task_assignment_id
+      const targetAssignmentId = request.target_assignment_id
+      const requesterId = request.requester_id
+      
+      console.log('Performing swap:', {
+        requesterAssignmentId,
+        targetAssignmentId,
+        requesterId,
+        responderId
+      })
+      
+      // Update requester's assignment to target member (responderId)
+      const { error: err1 } = await supabase
+        .from('task_assignments')
+        .update({ member_id: responderId })
+        .eq('id', requesterAssignmentId)
+      
+      if (err1) {
+        console.error('Error updating requester assignment:', err1)
+        throw err1
+      }
+      
+      // Update target's assignment to requester
+      const { error: err2 } = await supabase
+        .from('task_assignments')
+        .update({ member_id: requesterId })
+        .eq('id', targetAssignmentId)
+      
+      if (err2) {
+        console.error('Error updating target assignment:', err2)
+        throw err2
+      }
+      
+      console.log('Swap completed successfully')
+    } else if (accept && !request.target_assignment_id) {
+      console.warn('Swap accepted but no target_assignment_id found')
+    }
+    
+    return data
+  },
+
   // ========== CYCLE MANAGEMENT ==========
 
   getCycleStartDate(rotationPolicy: string, referenceDate: Date = new Date()): Date {
@@ -1672,16 +1900,33 @@ export const tasksModule = {
     if (!supabase) throw new Error('Supabase not configured');
     
     try {
+      // Get home rotation policy
+      const { data: home } = await supabase
+        .from('homes')
+        .select('rotation_policy')
+        .eq('id', homeId)
+        .single();
+      
+      if (!home) throw new Error('Home not found');
+      
+      const rotationPolicy = home.rotation_policy || 'weekly';
+      const today = new Date();
+      const currentCycleStart = this.getCycleStartDate(rotationPolicy, today);
+      const currentCycleStartStr = currentCycleStart.toISOString().split('T')[0];
+      
+      // Get pending tasks for current cycle only
       const { data: pendingAssignments } = await supabase
         .from('task_assignments')
         .select('id, task_id, member_id, home_members!inner(home_id)')
         .eq('home_members.home_id', homeId)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .gte('assigned_date', currentCycleStartStr);
 
       if (!pendingAssignments || pendingAssignments.length === 0) {
         return { reassigned: 0 };
       }
 
+      // Get active members
       const { data: members } = await supabase
         .from('home_members')
         .select('id')
@@ -1692,29 +1937,72 @@ export const tasksModule = {
         return { reassigned: 0 };
       }
 
+      // Count current tasks per member
+      const memberTaskCounts: { [key: number]: number } = {};
+      members.forEach(m => { memberTaskCounts[m.id] = 0; });
+      
+      pendingAssignments.forEach(a => {
+        memberTaskCounts[a.member_id] = (memberTaskCounts[a.member_id] || 0) + 1;
+      });
+
+      // Calculate ideal distribution
+      const totalTasks = pendingAssignments.length;
+      const memberCount = members.length;
+      const idealPerMember = Math.floor(totalTasks / memberCount);
+      const remainder = totalTasks % memberCount;
+
+      // Reassign to balance the distribution
       let reassignedCount = 0;
-      for (const assignment of pendingAssignments) {
-        const randomMember = members[Math.floor(Math.random() * members.length)];
+      
+      // Sort assignments by member task count (descending) - members with most tasks first
+      const sortedAssignments = [...pendingAssignments].sort((a, b) => {
+        return (memberTaskCounts[b.member_id] || 0) - (memberTaskCounts[a.member_id] || 0);
+      });
+
+      for (const assignment of sortedAssignments) {
+        const currentMemberCount = memberTaskCounts[assignment.member_id] || 0;
         
-        await supabase
-          .from('task_assignments')
-          .update({ 
-            member_id: randomMember.id,
-            status: 'skipped_reassigned'
-          })
-          .eq('id', assignment.id);
+        // Find member with least tasks who should get more
+        let minTasks = Infinity;
+        let bestMemberId = assignment.member_id;
         
-        await supabase
-          .from('task_assignments')
-          .insert({
-            task_id: assignment.task_id,
-            member_id: randomMember.id,
-            assigned_date: new Date().toISOString().split('T')[0],
-            due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            status: 'pending'
-          });
+        for (const member of members) {
+          const taskCount = memberTaskCounts[member.id] || 0;
+          // Only consider members who have fewer tasks than the current assignee
+          // and who haven't reached their ideal quota
+          const memberIdealCount = idealPerMember + (members.indexOf(member) < remainder ? 1 : 0);
+          
+          if (taskCount < currentMemberCount - 1 && taskCount < memberIdealCount && taskCount < minTasks) {
+            minTasks = taskCount;
+            bestMemberId = member.id;
+          }
+        }
         
-        reassignedCount++;
+        // Only reassign if we found a better member
+        if (bestMemberId !== assignment.member_id) {
+          const { error: updateError } = await supabase
+            .from('task_assignments')
+            .update({ member_id: bestMemberId })
+            .eq('id', assignment.id);
+          
+          if (!updateError) {
+            // Update counts for next iteration
+            memberTaskCounts[assignment.member_id]--;
+            memberTaskCounts[bestMemberId]++;
+            reassignedCount++;
+          }
+        }
+      }
+
+      // Log the change
+      if (reassignedCount > 0) {
+        await supabase.from('change_log').insert({
+          home_id: homeId,
+          change_type: 'task_reassignment',
+          change_description: `${reassignedCount} tareas pendientes redistribuidas equitativamente entre miembros`,
+          old_value: pendingAssignments.length.toString(),
+          new_value: reassignedCount.toString()
+        });
       }
 
       return { reassigned: reassignedCount };
