@@ -4,10 +4,40 @@ Historial de cambios del proyecto basado en commits.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
-## [0.8.5] - 2025-11-27
+## [0.9.0] - 2025-12-05
+
+### Added
+
+- Sistema completo de desafíos con seguimiento de progreso de usuario
+- Funcionalidad para reclamar recompensas de desafíos completados
+- Nuevas tablas de base de datos para sistema de desafíos (`challenge_templates`, `challenges`, `challenge_participants`, `challenge_progress`) integradas en scripts principales
+- Plantillas de desafíos de ejemplo y milestones de tareas en `02-seed-data.sql`
+- Funciones de base de datos para sistema de desafíos e incremento de estadísticas de miembros en `03-functions.sql`
+- Módulos de base de datos separados (`achievements.ts`, `auth.ts`, `challenges.ts`, `client.ts`, `homes.ts`, `members.ts`, `tasks.ts`, `utils.ts`)
+- Clases utilitarias CSS para altura, ancho y ajustes de padding/margin flexibles
+- Funcionalidad de incremento de estadísticas de miembros (`incrementMemberStats`)
+
+### Changed
+
+- Refactorizada estructura de `db.ts` en módulos separados para mejor mantenibilidad
+- Mejorado `ChallengesView` con seguimiento de progreso y manejo optimizado de propuestas
+- Actualizado `challengesStore` con funcionalidad de seguimiento de progreso de usuario
+- Consolidados scripts de desafíos en scripts principales (`01-create-tables.sql`, `02-seed-data.sql`, `03-functions.sql`)
+- Actualizada condición de nivel de maestría para incluir novice en renderizado de botón de cancelar tarea
+- Mejorada lógica de obtención de nivel de maestría en módulo de desafíos para manejar correctamente nivel novice
+- Mejorado `GeneralSettingsDialog` con nuevos iconos, notificaciones toast y visualización de versión
+- Mejorada legibilidad y mantenibilidad general del código
+
+### Removed
+
+- Script separado `05-challenge-system.sql` (consolidado en scripts principales)
+- Script separado `06-sample-challenge-templates.sql` (consolidado en `02-seed-data.sql`)
+
+## [0.8.6] - 2025-11-27
 
 ### Changed
 - App Icon in onboarding view
+- Improved layout desktop on different views
 
 ## [0.8.5] - 2025-11-27
 

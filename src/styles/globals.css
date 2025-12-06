@@ -228,6 +228,17 @@ html {
   gap: 8px;
 }
 
+/* Toast title and description color consistency */
+[data-sonner-toast] [data-title] {
+  color: #1a1a1a !important;
+  font-weight: 500;
+}
+
+[data-sonner-toast] [data-description] {
+  color: #4a4a4a !important;
+  opacity: 1;
+}
+
 /* Improve toast visibility */
 [data-sonner-toast][data-type='success'] {
   border-left: 3px solid #10b981;
