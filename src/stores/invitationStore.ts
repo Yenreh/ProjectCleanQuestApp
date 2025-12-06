@@ -150,8 +150,6 @@ export const useInvitationStore = create<InvitationState>()(
         try {
           const emailInvitation = await db.getPendingInvitationByEmail(email);
           if (emailInvitation && emailInvitation.invitation_token) {
-            console.log('Store: Found pending invitation for email:', email);
-            
             // Get owner name from the home profile data
             const ownerName = emailInvitation.homes?.profiles?.full_name || 
                             emailInvitation.homes?.profiles?.email || 
