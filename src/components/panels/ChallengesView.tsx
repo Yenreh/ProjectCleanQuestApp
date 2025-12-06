@@ -76,7 +76,7 @@ export function ChallengesView({ masteryLevel, currentMember, homeId }: Challeng
   };
 
   const groupChallenges = challenges.filter(c => c.challenge_type === "group");
-  const personalChallenges = challenges.filter(c => c.challenge_type === "personal");
+  const personalChallenges = challenges.filter(c => c.challenge_type === "individual");
 
   const renderAchievements = (achievements: Achievement[], showAll: boolean) => {
     const displayAchievements = showAll ? achievements : achievements.slice(0, 6);

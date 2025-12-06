@@ -1255,13 +1255,6 @@ export const tasksModule = {
       const targetAssignmentId = request.target_assignment_id
       const requesterId = request.requester_id
       
-      console.log('Performing swap:', {
-        requesterAssignmentId,
-        targetAssignmentId,
-        requesterId,
-        responderId
-      })
-      
       // Update requester's assignment to target member (responderId)
       const { error: err1 } = await supabase
         .from('task_assignments')
@@ -1283,10 +1276,6 @@ export const tasksModule = {
         console.error('Error updating target assignment:', err2)
         throw err2
       }
-      
-      console.log('Swap completed successfully')
-    } else if (accept && !request.target_assignment_id) {
-      console.warn('Swap accepted but no target_assignment_id found')
     }
     
     return data

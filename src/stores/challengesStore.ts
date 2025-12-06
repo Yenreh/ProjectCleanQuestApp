@@ -60,7 +60,6 @@ export const useChallengesStore = create<ChallengesState>()(
           );
           
           if (personalChallenges.length === 0) {
-            console.log('No personal challenges found, generating...');
             try {
               await db.generateDailyChallenges(homeId, memberId);
               hasGenerated = true;
@@ -74,7 +73,6 @@ export const useChallengesStore = create<ChallengesState>()(
           );
           
           if (groupChallenges.length === 0) {
-            console.log('No group challenges found, generating...');
             try {
               await db.generateCycleChallenge(homeId);
               hasGenerated = true;

@@ -70,16 +70,12 @@ export const db = {
     // 1. Complete the task
     const result = await tasksModule.completeTask(assignmentId, memberId, notes, evidenceUrl)
     
-    console.log('Task completed, checking challenges...', { task_id: result.task_id, home_id: result.home_id, memberId })
-    
     // 2. Trigger challenge updates in background
     try {
       // Get active challenges for this user (individual) and home (group)
       // We use the home_id returned by the modified completeTask
       if (result.home_id && result.task_id) {
         const challenges = await challengesModule.getActiveChallenges(result.home_id, memberId)
-        
-        console.log(`Found ${challenges.length} active challenges for user`)
         
         let challengesUpdated = false
         
@@ -88,14 +84,10 @@ export const db = {
           // We only update if the user is a participant (progress exists)
           // completeChallengeTask checks this internally
           try {
-              console.log(`Updating challenge ${challenge.id} with task ${result.task_id}`)
               await challengesModule.completeChallengeTask(challenge.id, result.task_id, memberId)
-              console.log(`✅ Challenge ${challenge.id} updated successfully`)
               challengesUpdated = true
           } catch (e) {
               // Ignore errors for challenges the user isn't part of or other minor issues
-              // e.g. "Progress not found" is expected for challenges the user hasn't joined
-              console.log(`⚠️ Could not update challenge ${challenge.id}:`, e)
           }
         }
         
@@ -107,7 +99,6 @@ export const db = {
           
           // Reload challenge data to reflect updated progress
           await store.loadData(result.home_id, memberId)
-          console.log('✅ Challenges store refreshed')
         }
       }
     } catch (error) {

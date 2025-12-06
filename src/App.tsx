@@ -138,24 +138,18 @@ export default function App() {
       const { currentHome: updatedHome } = useHomeStore.getState();
       const { currentMember: updatedMember } = useMembersStore.getState();
       
-      console.log('App: loadUserData - home:', updatedHome, 'member:', updatedMember);
-      
       // Check if user has completed onboarding
       if (updatedHome && updatedMember) {
-        console.log('App: User has home and member, marking onboarding complete');
         setHasCompletedOnboarding(true);
         
         // Auto-check and start new cycle if needed
-        console.log('App: Checking if new cycle needs to be started...');
         const cycleResult = await db.checkAndStartNewCycleIfNeeded(updatedHome.id);
         if (cycleResult.newCycleStarted) {
-          console.log(`App: ✅ New cycle started with ${cycleResult.assignments} assignments`);
           toast.success(`Nuevo ciclo iniciado con ${cycleResult.assignments} tareas asignadas`);
           // Reload home data to refresh the view
           await loadHomeData(userId);
         }
       } else {
-        console.log('App: No home or member found, checking invitations...');
         // Check if there's a pending invitation from store
         if (invitationToken) {
           try {
@@ -199,7 +193,6 @@ export default function App() {
         }
         
         // Email invitation check is now handled by useEffect watching currentUser
-        console.log('App: No token invitation found, keeping in onboarding');
         setHasCompletedOnboarding(false);
       }
     } catch (error) {

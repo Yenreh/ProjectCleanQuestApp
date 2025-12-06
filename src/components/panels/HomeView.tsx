@@ -238,14 +238,14 @@ export const HomeView = memo(function HomeView({ masteryLevel, currentMember, cu
 
       {/* NOVICE: Rotation Status (visible for all levels) */}
       <div className="w-full mb-4">
-        {rotationPercentage <= 33 ? (
+        {rotationPercentage >= 70 ? (
           <Badge className="bg-[#e9f5f0] text-[#6fbd9d] px-3 py-2 w-full justify-center">
-            ✓ Rotación equilibrada ({rotationPercentage}%)
+            Rotacion equilibrada ({rotationPercentage}%)
           </Badge>
         ) : (
           <Badge className="bg-[#fff4e6] text-[#d97706] px-3 py-2 w-full justify-center">
             <AlertCircle className="w-4 h-4 mr-1" />
-            Alerta: Rotación desbalanceada ({rotationPercentage}%)
+            Alerta: Rotacion desbalanceada ({rotationPercentage}%)
           </Badge>
         )}
       </div>

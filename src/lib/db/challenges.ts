@@ -286,37 +286,8 @@ export const challengesModule = {
     
     if (challengeError) throw challengeError
     
-    // Create progress entry for the member (or all members if group challenge)
-    if (template.challenge_type === 'individual' && memberId) {
-      await supabase
-        .from('challenge_progress')
-        .insert({
-          challenge_id: challenge.id,
-          member_id: memberId,
-          progress_data: initializeProgressData(template.category, template.requirements),
-          is_completed: false
-        })
-    } else if (template.challenge_type === 'group') {
-      // Get all active members
-      const { data: members } = await supabase
-        .from('home_members')
-        .select('id')
-        .eq('home_id', homeId)
-        .eq('status', 'active')
-      
-      if (members) {
-        await supabase
-          .from('challenge_progress')
-          .insert(
-            members.map(m => ({
-              challenge_id: challenge.id,
-              member_id: m.id,
-              progress_data: initializeProgressData(template.category, template.requirements),
-              is_completed: false
-            }))
-          )
-      }
-    }
+    // NOTE: No progress entries are created automatically
+    // Users must join challenges manually via joinChallenge()
     
     return challenge as ActiveChallenge
   },

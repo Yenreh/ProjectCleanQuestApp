@@ -328,8 +328,6 @@ export const useOnboardingStore = create<OnboardingState>()(
           // Get zones to map zone names to IDs
           const zones = await db.getZones(createdHomeId);
           const zoneMap = new Map(zones.map(z => [z.name, z.id]));
-          
-          console.log('Available zones:', zones.map(z => ({ id: z.id, name: z.name })));
 
           // Create tasks and assign to owner
           await Promise.all(
@@ -341,22 +339,15 @@ export const useOnboardingStore = create<OnboardingState>()(
                 // Find zone_id based on template zone name
                 let zoneId = template.zone ? zoneMap.get(template.zone) : undefined;
                 
-                // If no zone found and template has a zone, log warning
+                // If no zone found and template has a zone, try case-insensitive match
                 if (template.zone && !zoneId) {
-                  console.warn(`Template "${template.title}" has zone "${template.zone}" but it wasn't found in zones. Available zones:`, Array.from(zoneMap.keys()));
-                  // Try to match case-insensitively or with partial match
                   const zoneLower = template.zone.toLowerCase();
                   for (const [name, id] of zoneMap.entries()) {
                     if (name.toLowerCase() === zoneLower || name.toLowerCase().includes(zoneLower)) {
-                      console.log(`Found zone match: "${name}" for template zone "${template.zone}"`);
                       zoneId = id;
                       break;
                     }
                   }
-                }
-                
-                if (!zoneId) {
-                  console.warn(`No zone assigned for task "${template.title}" (template.zone: ${template.zone})`);
                 }
 
                 // Create task

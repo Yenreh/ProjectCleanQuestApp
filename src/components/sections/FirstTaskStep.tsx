@@ -50,15 +50,13 @@ export function FirstTaskStep({ onComplete }: FirstTaskStepProps) {
               // Don't block onboarding completion if achievements fail
             }
             
-            toast.success("¡Onboarding completado! 🎉");
+            toast.success("Onboarding completado!");
             
             // Wait a bit before redirecting
             setTimeout(() => {
-              console.log('FirstTaskStep: Calling onComplete callback');
               onCompleteRef.current();
             }, 1500);
           } else {
-            console.error('FirstTaskStep: No user found');
             toast.error('No se pudo obtener el usuario');
             setIsCompleting(false);
           }
